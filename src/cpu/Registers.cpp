@@ -1,0 +1,81 @@
+#include "Registers.h"
+#include "Performance.h"
+#include "Log.h"
+
+Registers::Registers(sc_module_name name) : 
+    sc_module(name),
+    m_sp(0x20001000),  // Default stack pointer
+    m_lr(0x00000000),
+    m_pc(0x00000000),
+    m_psr(0x00000000)
+{
+    // Initialize general purpose registers to 0
+    for (int i = 0; i < 13; i++) {
+        m_gpr[i] = 0;
+    }
+    
+    LOG_INFO("Registers initialized");
+}
+
+uint32_t Registers::read_register(uint8_t reg_num)
+{
+    Performance::getInstance().increment_register_reads();
+    
+    uint32_t value = 0;
+    
+    if (reg_num < 13) {
+        value = m_gpr[reg_num];
+    } else if (reg_num == 13) {
+        value = m_sp;
+    } else if (reg_num == 14) {
+        value = m_lr;
+    } else if (reg_num == 15) {
+        value = m_pc;
+    } else {
+        LOG_WARNING("Invalid register number: " + std::to_string(reg_num));
+        return 0;
+    }
+    
+    if (Log::getInstance().get_log_level() >= LOG_TRACE) {
+        Log::getInstance().log_register_access("R" + std::to_string(reg_num), value, false);
+    }
+    
+    return value;
+}
+
+void Registers::write_register(uint8_t reg_num, uint32_t value)
+{
+    Performance::getInstance().increment_register_writes();
+    
+    if (reg_num < 13) {
+        m_gpr[reg_num] = value;
+    } else if (reg_num == 13) {
+        m_sp = value;
+    } else if (reg_num == 14) {
+        m_lr = value;
+    } else if (reg_num == 15) {
+        m_pc = value;
+    } else {
+        LOG_WARNING("Invalid register number: " + std::to_string(reg_num));
+        return;
+    }
+    
+    if (Log::getInstance().get_log_level() >= LOG_TRACE) {
+        Log::getInstance().log_register_access("R" + std::to_string(reg_num), value, true);
+    }
+}
+
+void Registers::reset()
+{
+    // Reset all registers to initial values
+    for (int i = 0; i < 13; i++) {
+        m_gpr[i] = 0;
+    }
+    
+    m_sp = 0x20001000;  // Default stack pointer
+    m_lr = 0x00000000;
+    m_pc = 0x00000000;
+    m_psr = 0x00000000;
+    
+    LOG_INFO("Registers reset");
+}
