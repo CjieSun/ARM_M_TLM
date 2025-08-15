@@ -36,34 +36,95 @@ InstructionFields Instruction::decode(uint16_t instruction)
 
 InstructionType Instruction::identify_instruction_type(uint16_t instruction)
 {
-    // Basic Thumb instruction identification
-    // This is a simplified version - real ARM would have more complex decoding
+    // ARMv6-M Thumb instruction identification based on encoding patterns
     
-    if ((instruction & 0xF000) == 0xD000) {
-        return INST_BRANCH;  // B<cond>
+    // Format 1-2: Move shifted register and Add/subtract (000xx - 001xx)
+    if ((instruction & 0xE000) == 0x0000) {
+        if ((instruction & 0x1800) == 0x1800) {
+            return INST_DATA_PROCESSING; // Add/subtract format
+        }
+        return INST_DATA_PROCESSING; // Move shifted register format
     }
     
-    if ((instruction & 0xF800) == 0xE000) {
-        return INST_BRANCH;  // B (unconditional)
+    // Format 3: Move/compare/add/subtract immediate (001xx)
+    if ((instruction & 0xE000) == 0x2000) {
+        return INST_DATA_PROCESSING;
     }
     
+    // Format 4-5: ALU operations and Hi register operations (010xx)
     if ((instruction & 0xF000) == 0x4000) {
-        return INST_DATA_PROCESSING;  // Data processing
+        if ((instruction & 0x0400) == 0x0000) {
+            return INST_DATA_PROCESSING; // ALU operations
+        } else {
+            if ((instruction & 0x0300) == 0x0300) {
+                return INST_BRANCH; // BX/BLX instructions
+            }
+            return INST_DATA_PROCESSING; // Hi register operations
+        }
     }
     
-    if ((instruction & 0xF000) == 0x6000 || (instruction & 0xF000) == 0x8000) {
-        return INST_LOAD_STORE;  // Load/Store
+    // PC-relative load (01001)
+    if ((instruction & 0xF800) == 0x4800) {
+        return INST_LOAD_STORE;
     }
     
+    // Load/store register offset and sign-extended (0101x)
+    if ((instruction & 0xF000) == 0x5000) {
+        return INST_LOAD_STORE;
+    }
+    
+    // Load/store immediate offset (011xx)
+    if ((instruction & 0xE000) == 0x6000) {
+        return INST_LOAD_STORE;
+    }
+    
+    // Load/store halfword (1000x)
+    if ((instruction & 0xF000) == 0x8000) {
+        return INST_LOAD_STORE;
+    }
+    
+    // SP-relative load/store (1001x)
+    if ((instruction & 0xF000) == 0x9000) {
+        return INST_LOAD_STORE;
+    }
+    
+    // Load address (1010x)
+    if ((instruction & 0xF000) == 0xA000) {
+        return INST_DATA_PROCESSING; // ADD to PC/SP
+    }
+    
+    // Add offset to Stack Pointer and PUSH/POP (1011x)
+    if ((instruction & 0xF000) == 0xB000) {
+        if ((instruction & 0x0600) == 0x0400) {
+            return INST_LOAD_STORE_MULTIPLE; // PUSH/POP
+        }
+        return INST_MISCELLANEOUS; // Add offset to SP
+    }
+    
+    // Multiple load/store (1100x)
     if ((instruction & 0xF000) == 0xC000) {
-        return INST_LOAD_STORE_MULTIPLE;  // LDM/STM
+        return INST_LOAD_STORE_MULTIPLE;
     }
     
-    if ((instruction & 0xFF00) == 0xDF00) {
-        return INST_EXCEPTION;  // SVC
+    // Conditional branch and SWI (1101x)
+    if ((instruction & 0xF000) == 0xD000) {
+        if ((instruction & 0x0F00) == 0x0F00) {
+            return INST_EXCEPTION; // SWI
+        }
+        return INST_BRANCH; // Conditional branch
     }
     
-    return INST_DATA_PROCESSING;  // Default to data processing
+    // Unconditional branch (11100)
+    if ((instruction & 0xF800) == 0xE000) {
+        return INST_BRANCH;
+    }
+    
+    // Long branch with link (1111x) - 32-bit instruction
+    if ((instruction & 0xF000) == 0xF000) {
+        return INST_BRANCH;
+    }
+    
+    return INST_DATA_PROCESSING; // Default fallback
 }
 
 InstructionFields Instruction::decode_branch(uint16_t instruction)
@@ -73,19 +134,31 @@ InstructionFields Instruction::decode_branch(uint16_t instruction)
     fields.type = INST_BRANCH;
     
     if ((instruction & 0xF000) == 0xD000) {
-        // B<cond> instruction
-        fields.cond = (instruction >> 8) & 0xF;
-        fields.imm = instruction & 0xFF;
+        // Conditional branch (1101xxxx)
+        fields.cond = (instruction >> 8) & 0xF; // Bits 11:8
+        fields.imm = instruction & 0xFF;        // Bits 7:0
+        
+        // Sign extend 8-bit offset to 16-bit
         if (fields.imm & 0x80) {
-            fields.imm |= 0xFF00;  // Sign extend
+            fields.imm |= 0xFF00;
         }
+        fields.imm *= 2; // Convert to byte offset
     } else if ((instruction & 0xF800) == 0xE000) {
-        // B instruction (unconditional)
+        // Unconditional branch (11100xxx)
         fields.cond = 0xE;  // Always condition
-        fields.imm = instruction & 0x7FF;
+        fields.imm = instruction & 0x7FF; // Bits 10:0
+        
+        // Sign extend 11-bit offset
         if (fields.imm & 0x400) {
-            fields.imm |= 0xF800;  // Sign extend
+            fields.imm |= 0xF800;
         }
+        fields.imm *= 2; // Convert to byte offset
+    } else if ((instruction & 0xF000) == 0xF000) {
+        // Long branch with link - first half (1111xxxx)
+        // This is a 32-bit instruction, we need the second half too
+        fields.cond = 0xE; // Always condition
+        fields.imm = instruction & 0x7FF; // High part of offset
+        fields.alu_op = 1; // Mark as BL instruction
     }
     
     return fields;
@@ -97,10 +170,61 @@ InstructionFields Instruction::decode_data_processing(uint16_t instruction)
     fields.opcode = instruction;
     fields.type = INST_DATA_PROCESSING;
     
-    // Simplified data processing decode
-    fields.rd = instruction & 0x7;
-    fields.rn = (instruction >> 3) & 0x7;
-    fields.rm = (instruction >> 6) & 0x7;
+    // Identify specific data processing format
+    if ((instruction & 0xE000) == 0x0000) {
+        // Format 1: Move shifted register (000xx)
+        if ((instruction & 0x1800) != 0x1800) {
+            fields.rd = instruction & 0x7;                    // Bits 2:0
+            fields.rm = (instruction >> 3) & 0x7;            // Bits 5:3
+            fields.shift_amount = (instruction >> 6) & 0x1F; // Bits 10:6
+            fields.shift_type = (instruction >> 11) & 0x3;   // Bits 12:11
+        } else {
+            // Format 2: Add/subtract (00110, 00111)
+            fields.rd = instruction & 0x7;           // Bits 2:0
+            fields.rn = (instruction >> 3) & 0x7;   // Bits 5:3
+            bool immediate_flag = (instruction & 0x0400) != 0; // Bit 10
+            if (immediate_flag) {
+                fields.imm = (instruction >> 6) & 0x7; // 3-bit immediate
+                fields.rm = 0xFF; // Mark as immediate
+            } else {
+                fields.rm = (instruction >> 6) & 0x7;  // Register
+            }
+            fields.alu_op = (instruction & 0x0200) ? 2 : 1; // Bit 9: 0=ADD, 1=SUB
+        }
+    } else if ((instruction & 0xE000) == 0x2000) {
+        // Format 3: Move/compare/add/subtract immediate (001xx)
+        fields.rd = (instruction >> 8) & 0x7;    // Bits 10:8
+        fields.rn = fields.rd;                   // Source same as dest for most ops
+        fields.imm = instruction & 0xFF;         // Bits 7:0
+        fields.alu_op = (instruction >> 11) & 0x3; // Bits 12:11
+    } else if ((instruction & 0xFC00) == 0x4000) {
+        // Format 4: ALU operations (010000xxxx)
+        fields.rd = instruction & 0x7;           // Bits 2:0 (also source)
+        fields.rn = fields.rd;                   // Source same as dest
+        fields.rm = (instruction >> 3) & 0x7;   // Bits 5:3
+        fields.alu_op = (instruction >> 6) & 0xF; // Bits 9:6
+    } else if ((instruction & 0xFC00) == 0x4400) {
+        // Format 5: Hi register operations (010001xxxx)
+        fields.rd = instruction & 0x7;           // Bits 2:0
+        fields.rm = (instruction >> 3) & 0x7;   // Bits 5:3
+        fields.h1 = (instruction & 0x80) != 0;  // Bit 7
+        fields.h2 = (instruction & 0x40) != 0;  // Bit 6
+        fields.alu_op = (instruction >> 8) & 0x3; // Bits 9:8
+        // Adjust for Hi registers
+        if (fields.h1) fields.rd += 8;
+        if (fields.h2) fields.rm += 8;
+    } else if ((instruction & 0xF000) == 0xA000) {
+        // Format 12: Load address (1010x)
+        fields.rd = (instruction >> 8) & 0x7;    // Bits 10:8
+        fields.imm = (instruction & 0xFF) * 4;   // Bits 7:0, word-aligned
+        fields.rn = (instruction & 0x0800) ? 13 : 15; // Bit 11: SP(13) or PC(15)
+        fields.alu_op = 1; // ADD operation
+    } else {
+        // Basic decode for other cases
+        fields.rd = instruction & 0x7;
+        fields.rn = (instruction >> 3) & 0x7;
+        fields.rm = (instruction >> 6) & 0x7;
+    }
     
     return fields;
 }
@@ -111,10 +235,60 @@ InstructionFields Instruction::decode_load_store(uint16_t instruction)
     fields.opcode = instruction;
     fields.type = INST_LOAD_STORE;
     
-    // Simplified load/store decode
-    fields.rd = instruction & 0x7;
-    fields.rn = (instruction >> 3) & 0x7;
-    fields.imm = (instruction >> 6) & 0x1F;
+    if ((instruction & 0xF800) == 0x4800) {
+        // PC-relative load (01001)
+        fields.rd = (instruction >> 8) & 0x7;    // Bits 10:8
+        fields.imm = (instruction & 0xFF) * 4;   // Bits 7:0, word-aligned
+        fields.rn = 15; // PC register
+        fields.load_store_bit = true; // Always load
+        fields.byte_word = false;     // Always word
+    } else if ((instruction & 0xF000) == 0x5000) {
+        // Load/store with register offset (0101x)
+        fields.rd = instruction & 0x7;           // Bits 2:0
+        fields.rn = (instruction >> 3) & 0x7;   // Bits 5:3 (base register)
+        fields.rm = (instruction >> 6) & 0x7;   // Bits 8:6 (offset register)
+        fields.load_store_bit = (instruction & 0x0800) != 0; // Bit 11 (L bit)
+        fields.byte_word = (instruction & 0x0400) != 0;      // Bit 10 (B bit)
+        
+        // Check for sign-extended loads (0101xx1x)
+        if ((instruction & 0x0200) != 0) {
+            // Sign-extended byte/halfword operations
+            uint8_t op = (instruction >> 10) & 0x3;
+            fields.alu_op = op; // 0=STRH, 1=LDSB, 2=LDRH, 3=LDSH
+        }
+    } else if ((instruction & 0xE000) == 0x6000) {
+        // Load/store with immediate offset (011xx)
+        fields.rd = instruction & 0x7;           // Bits 2:0
+        fields.rn = (instruction >> 3) & 0x7;   // Bits 5:3 (base register)
+        fields.imm = (instruction >> 6) & 0x1F; // Bits 10:6 (immediate offset)
+        fields.load_store_bit = (instruction & 0x0800) != 0; // Bit 11 (L bit)
+        fields.byte_word = (instruction & 0x1000) != 0;      // Bit 12 (B bit)
+        
+        // Scale immediate for word access
+        if (!fields.byte_word) {
+            fields.imm *= 4;
+        }
+    } else if ((instruction & 0xF000) == 0x8000) {
+        // Load/store halfword (1000x)
+        fields.rd = instruction & 0x7;           // Bits 2:0
+        fields.rn = (instruction >> 3) & 0x7;   // Bits 5:3 (base register)
+        fields.imm = ((instruction >> 6) & 0x1F) * 2; // Bits 10:6, halfword-aligned
+        fields.load_store_bit = (instruction & 0x0800) != 0; // Bit 11 (L bit)
+        fields.byte_word = 2; // Halfword indicator
+    } else if ((instruction & 0xF000) == 0x9000) {
+        // SP-relative load/store (1001x)
+        fields.rd = (instruction >> 8) & 0x7;    // Bits 10:8
+        fields.imm = (instruction & 0xFF) * 4;   // Bits 7:0, word-aligned
+        fields.rn = 13; // SP register
+        fields.load_store_bit = (instruction & 0x0800) != 0; // Bit 11 (L bit)
+        fields.byte_word = false; // Always word
+    } else {
+        // Basic decode for compatibility
+        fields.rd = instruction & 0x7;
+        fields.rn = (instruction >> 3) & 0x7;
+        fields.imm = (instruction >> 6) & 0x1F;
+        fields.load_store_bit = (instruction & 0x0800) != 0;
+    }
     
     return fields;
 }
@@ -125,8 +299,27 @@ InstructionFields Instruction::decode_load_store_multiple(uint16_t instruction)
     fields.opcode = instruction;
     fields.type = INST_LOAD_STORE_MULTIPLE;
     
-    fields.rn = (instruction >> 8) & 0x7;
-    fields.imm = instruction & 0xFF;  // Register list
+    if ((instruction & 0xF600) == 0xB400) {
+        // PUSH/POP registers (1011x10x)
+        fields.reg_list = instruction & 0xFF;   // Bits 7:0 (register list)
+        fields.load_store_bit = (instruction & 0x0800) != 0; // Bit 11 (L bit: 0=PUSH, 1=POP)
+        fields.rn = 13; // SP register (implicit)
+        
+        // R bit (bit 8) indicates LR/PC inclusion
+        bool r_bit = (instruction & 0x0100) != 0;
+        if (r_bit) {
+            if (fields.load_store_bit) {
+                fields.reg_list |= 0x8000; // Include PC in POP
+            } else {
+                fields.reg_list |= 0x4000; // Include LR in PUSH
+            }
+        }
+    } else {
+        // Regular LDM/STM (1100x)
+        fields.rn = (instruction >> 8) & 0x7;   // Bits 10:8 (base register)
+        fields.reg_list = instruction & 0xFF;   // Bits 7:0 (register list)
+        fields.load_store_bit = (instruction & 0x0800) != 0; // Bit 11 (L bit)
+    }
     
     return fields;
 }
@@ -145,6 +338,14 @@ InstructionFields Instruction::decode_miscellaneous(uint16_t instruction)
     InstructionFields fields = {};
     fields.opcode = instruction;
     fields.type = INST_MISCELLANEOUS;
+    
+    if ((instruction & 0xFF00) == 0xB000) {
+        // Add offset to Stack Pointer (10110000)
+        fields.imm = (instruction & 0x7F) * 4;   // Bits 6:0, word-aligned
+        fields.alu_op = (instruction & 0x80) ? 2 : 1; // Bit 7: 0=ADD, 1=SUB
+        fields.rd = 13; // SP register
+        fields.rn = 13; // SP register
+    }
     
     return fields;
 }
