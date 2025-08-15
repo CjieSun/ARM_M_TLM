@@ -1,6 +1,62 @@
 # ARM_M_TLM
 This is another ARM cortex-M ISA simulator, this is coded in SystemC + TLM-2. It supports ARMv6-M thumb/thumb2 Instruction set.
 
+## Building the Simulator
+
+### Prerequisites
+- CMake (version 3.10 or higher)
+- G++ compiler with C++17 support
+- SystemC library (version 2.3.x)
+
+### Installation Steps
+1. **Install SystemC dependencies:**
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y libsystemc-dev cmake build-essential
+   ```
+
+2. **Clone and build the simulator:**
+   ```bash
+   git clone https://github.com/CjieSun/ARM_M_TLM.git
+   cd ARM_M_TLM
+   mkdir build && cd build
+   cmake ..
+   make -j4
+   ```
+
+3. **Run the simulator:**
+   ```bash
+   # Basic simulation (1ms duration)
+   ./bin/arm_m_tlm
+
+   # With debug logging
+   ./bin/arm_m_tlm --debug
+
+   # Load Intel HEX program
+   ./bin/arm_m_tlm --hex program.hex --trace
+
+   # Show help
+   ./bin/arm_m_tlm --help
+   ```
+
+## Usage
+
+### Command Line Options
+- `--hex <file>`: Load Intel HEX file into memory
+- `--log <file>`: Specify log file (default: simulation.log)
+- `--debug`: Enable debug-level logging
+- `--trace`: Enable instruction-level tracing
+- `--help, -h`: Show usage information
+
+### Example Usage
+```bash
+# Run with maximum logging detail
+./bin/arm_m_tlm --hex firmware.hex --trace --log detailed.log
+
+# Quick test run with debug info
+./bin/arm_m_tlm --debug
+```
+
 ##Description
 Brief description of the modules:
   CPU: Top entity that includes all other modules.
