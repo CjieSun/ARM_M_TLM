@@ -94,6 +94,35 @@ run-all: $(TEST_HEXS)
 		echo ""; \
 	done
 
+# Generate comprehensive test reports
+test-report: $(TEST_HEXS)
+	@echo "Generating comprehensive test reports..."
+	python3 ../../tools/test_runner.py \
+		--simulator ../../build/bin/arm_m_tlm \
+		--test-dir . \
+		--output-dir ../../reports
+	@echo "Test reports generated in ../../reports/"
+
+# Generate test report with JSON only
+test-report-json: $(TEST_HEXS)
+	@echo "Generating JSON test report..."
+	python3 ../../tools/test_runner.py \
+		--simulator ../../build/bin/arm_m_tlm \
+		--test-dir . \
+		--output-dir ../../reports \
+		--json
+	@echo "JSON test report generated in ../../reports/"
+
+# Generate test report with HTML only
+test-report-html: $(TEST_HEXS)
+	@echo "Generating HTML test report..."
+	python3 ../../tools/test_runner.py \
+		--simulator ../../build/bin/arm_m_tlm \
+		--test-dir . \
+		--output-dir ../../reports \
+		--html
+	@echo "HTML test report generated in ../../reports/"
+
 # Generate test documentation
 doc: $(TEST_LISTINGS)
 	@echo "Generated disassembly listings:"
@@ -108,5 +137,5 @@ check-toolchain:
 	@which $(CC) > /dev/null || (echo "ARM GCC toolchain not found. Please install arm-none-eabi-gcc"; exit 1)
 	@echo "ARM GCC toolchain found: $$($(CC) --version | head -1)"
 
-.PHONY: all clean run-all doc check-toolchain
+.PHONY: all clean run-all doc check-toolchain test-report test-report-json test-report-html
 .SECONDARY: $(TEST_OBJECTS) $(TEST_ELFS)

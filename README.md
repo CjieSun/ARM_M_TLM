@@ -57,6 +57,32 @@ This is another ARM cortex-M ISA simulator, this is coded in SystemC + TLM-2. It
 ./bin/arm_m_tlm --debug
 ```
 
+## Testing
+
+### Quick Test Execution
+Run all tests and generate comprehensive reports:
+```bash
+./run_tests.sh
+```
+
+### Manual Test Execution
+```bash
+# Build and run individual tests
+cd tests/assembly
+make test-report           # Generate HTML and JSON reports
+make test-report-html      # HTML report only
+make test-report-json      # JSON report only
+make run-all              # Run tests without reports
+```
+
+### Test Reports
+The testing system generates:
+- **HTML reports**: Interactive web-based test results with performance metrics
+- **JSON reports**: Machine-readable data for CI/CD integration
+- **Console output**: Real-time test execution status
+
+For detailed testing documentation, see [TEST_REPORTING.md](docs/TEST_REPORTING.md).
+
 ##Description
 Brief description of the modules:
   CPU: Top entity that includes all other modules.
