@@ -106,3 +106,13 @@ int main(void) {
     
     return 0;
 }
+
+// Entry point for bare-metal C code
+void _start(void) {
+    main();
+    // Infinite loop in case main returns
+    while (1) {
+        volatile int dummy = 0;
+        (void)dummy;
+    }
+}

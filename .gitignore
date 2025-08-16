@@ -9,6 +9,10 @@ obj/
 *.so
 *.dylib
 *.exe
+*.elf
+*.hex
+*.bin
+*.lst
 
 # Logs and output files
 *.log
