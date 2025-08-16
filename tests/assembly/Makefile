@@ -12,7 +12,7 @@ OBJDUMP = $(TOOLCHAIN_PREFIX)objdump
 # Compiler flags for Cortex-M0 (ARMv6-M)
 CFLAGS = -mcpu=cortex-m0 -mthumb -Wall -Wextra -std=c99 -Os
 ASFLAGS = -mcpu=cortex-m0 -mthumb
-LDFLAGS = -T linker_script.ld -nostdlib -nostartfiles
+LDFLAGS = -T linker_script.ld -nostdlib
 
 # Test files
 TEST_SOURCES = data_processing_test.s load_store_test.s branch_test.s \
