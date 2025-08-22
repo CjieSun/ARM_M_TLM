@@ -7,7 +7,7 @@ Instruction::Instruction(sc_module_name name) : sc_module(name)
     LOG_INFO("Instruction decoder initialized");
 }
 
-InstructionFields Instruction::decode(uint16_t instruction)
+InstructionFields Instruction::decode(uint32_t instruction, bool is_32bit)
 {
     // Initialize all fields to known values
     InstructionFields fields = {};
@@ -27,32 +27,44 @@ InstructionFields Instruction::decode(uint16_t instruction)
     fields.reg_list = 0;
     fields.load_store_bit = false;
     fields.byte_word = 0;
-    fields.type = identify_instruction_type(instruction);
+    fields.is_32bit = is_32bit;
     
-    // Decode based on instruction type
-    switch (fields.type) {
-        case INST_BRANCH:
-            fields = decode_branch(instruction);
-            break;
-        case INST_DATA_PROCESSING:
-            fields = decode_data_processing(instruction);
-            break;
-        case INST_LOAD_STORE:
-            fields = decode_load_store(instruction);
-            break;
-        case INST_LOAD_STORE_MULTIPLE:
-            fields = decode_load_store_multiple(instruction);
-            break;
-        case INST_STATUS_REGISTER:
-            fields = decode_status_register(instruction);
-            break;
-        case INST_MISCELLANEOUS:
-            fields = decode_miscellaneous(instruction);
-            break;
-        default:
-            fields.type = INST_UNKNOWN;
-            break;
+    // For 16-bit instructions, use only the lower 16 bits for type identification
+    uint16_t first_half = is_32bit ? (instruction >> 16) & 0xFFFF : instruction & 0xFFFF;
+    fields.type = identify_instruction_type(first_half);
+    
+    if (is_32bit) {
+        // Handle 32-bit Thumb-2 instructions
+        fields = decode_32bit_instruction(instruction);
+    } else {
+        // Handle 16-bit Thumb instructions (existing logic)
+        switch (fields.type) {
+            case INST_BRANCH:
+                fields = decode_branch(first_half);
+                break;
+            case INST_DATA_PROCESSING:
+                fields = decode_data_processing(first_half);
+                break;
+            case INST_LOAD_STORE:
+                fields = decode_load_store(first_half);
+                break;
+            case INST_LOAD_STORE_MULTIPLE:
+                fields = decode_load_store_multiple(first_half);
+                break;
+            case INST_STATUS_REGISTER:
+                fields = decode_status_register(first_half);
+                break;
+            case INST_MISCELLANEOUS:
+                fields = decode_miscellaneous(first_half);
+                break;
+            default:
+                fields.type = INST_UNKNOWN;
+                break;
+        }
     }
+    
+    // Set the 32-bit flag in all cases
+    fields.is_32bit = is_32bit;
     
     // Debug logging for decode verification
     if (Log::getInstance().get_log_level() >= LOG_DEBUG) {
@@ -64,6 +76,7 @@ InstructionFields Instruction::decode(uint16_t instruction)
         if (fields.rs != 0xFF) ss << " rs=" << std::dec << (int)fields.rs;
         if (fields.imm != 0) ss << " imm=0x" << std::hex << fields.imm;
         ss << " type=" << std::dec << fields.type;
+        ss << " 32bit=" << fields.is_32bit;
         LOG_DEBUG("INSTRUCTION DECODE: " + ss.str());
     }
     
@@ -386,9 +399,87 @@ InstructionFields Instruction::decode_miscellaneous(uint16_t instruction)
     return fields;
 }
 
+InstructionFields Instruction::decode_32bit_instruction(uint32_t instruction)
+{
+    InstructionFields fields = {};
+    fields.opcode = instruction;
+    fields.is_32bit = true;
+    
+    // Extract first and second halfwords
+    uint16_t first_half = (instruction >> 16) & 0xFFFF;
+    uint16_t second_half = instruction & 0xFFFF;
+    
+    // Basic 32-bit instruction decoding based on ARMv7-M patterns
+    uint8_t op1 = (first_half >> 11) & 0x3;  // Bits [12:11]
+    uint8_t op2 = (first_half >> 4) & 0x7F;  // Bits [10:4]
+    uint8_t op = (second_half >> 15) & 0x1;  // Bit [15] of second halfword
+    
+    // Identify instruction class based on encoding table
+    if (op1 == 0x01) {
+        if ((op2 & 0x64) == 0x00) {
+            // Load/store multiple
+            fields.type = INST_LOAD_STORE_MULTIPLE;
+            fields.rn = first_half & 0xF;
+            fields.reg_list = second_half & 0xFFFF;
+            fields.load_store_bit = (first_half & 0x10) != 0;
+        } else if ((op2 & 0x64) == 0x04) {
+            // Load/store dual or exclusive
+            fields.type = INST_LOAD_STORE;
+            // Basic decoding for dual/exclusive operations
+            fields.rn = first_half & 0xF;
+            fields.rd = (second_half >> 12) & 0xF;
+            fields.rm = second_half & 0xF;
+        } else {
+            // Data processing (shifted register)
+            fields.type = INST_DATA_PROCESSING;
+            fields.rn = first_half & 0xF;
+            fields.rd = (second_half >> 8) & 0xF;
+            fields.rm = second_half & 0xF;
+            fields.alu_op = (first_half >> 5) & 0xF;
+        }
+    } else if (op1 == 0x10) {
+        if (op == 0) {
+            // Data processing (modified immediate)
+            fields.type = INST_DATA_PROCESSING;
+            fields.rn = first_half & 0xF;
+            fields.rd = (second_half >> 8) & 0xF;
+            fields.alu_op = (first_half >> 5) & 0xF;
+            // Extract modified immediate (complex encoding)
+            fields.imm = second_half & 0xFF;
+        } else {
+            // Data processing (plain binary immediate)
+            fields.type = INST_DATA_PROCESSING;
+            fields.rd = (second_half >> 8) & 0xF;
+            fields.imm = ((first_half & 0xF) << 12) | (second_half & 0xFF);
+        }
+    } else if (op1 == 0x11) {
+        // Branches and miscellaneous control
+        fields.type = INST_BRANCH;
+        fields.cond = (first_half >> 6) & 0xF;
+        // Extract branch offset (complex encoding)
+        uint32_t imm11 = first_half & 0x7FF;
+        uint32_t imm10 = second_half & 0x3FF;
+        fields.imm = (imm11 << 12) | (imm10 << 1);
+        
+        // Sign extend 24-bit offset
+        if (fields.imm & 0x800000) {
+            fields.imm |= 0xFF000000;
+        }
+    } else {
+        // Default classification
+        fields.type = INST_DATA_PROCESSING;
+        fields.rn = first_half & 0xF;
+        fields.rd = (second_half >> 8) & 0xF;
+        fields.rm = second_half & 0xF;
+    }
+    
+    return fields;
+}
+
 bool Instruction::is_32bit_instruction(uint16_t first_half)
 {
-    // Check for 32-bit Thumb-2 instructions
+    // Check for 32-bit Thumb-2 instructions according to ARMv7-M specification
+    // 32-bit instructions have bits [15:13] = 111 and bits [12:11] != 00
     return ((first_half & 0xE000) == 0xE000) && ((first_half & 0x1800) != 0x0000);
 }
 

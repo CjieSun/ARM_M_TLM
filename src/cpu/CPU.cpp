@@ -45,19 +45,37 @@ void CPU::cpu_thread()
             // Get current PC
             m_pc = m_registers->get_pc();
             
-            // Fetch instruction
-            uint32_t instruction = fetch_instruction(m_pc);
+            // Fetch instruction (always fetch 32-bit to check for 32-bit instructions)
+            uint32_t instruction_data = fetch_instruction(m_pc);
+            
+            // Extract first halfword to check if it's a 32-bit instruction
+            uint16_t first_half = (instruction_data >> 0) & 0xFFFF;  // Little-endian: first half is in lower bits
+            bool is_32bit = m_instruction->is_32bit_instruction(first_half);
+            
+            uint32_t full_instruction;
+            if (is_32bit) {
+                // For 32-bit instruction, we already have both halves
+                // ARM instructions are stored in little-endian format
+                full_instruction = instruction_data;
+            } else {
+                // For 16-bit instruction, use only the first halfword
+                full_instruction = first_half;
+            }
             
             // Decode instruction
-            InstructionFields fields = m_instruction->decode(instruction & 0xFFFF);
+            InstructionFields fields = m_instruction->decode(full_instruction, is_32bit);
             
             // Log instruction execution
             if (Log::getInstance().get_log_level() >= LOG_TRACE) {
                 std::stringstream ss;
-                ss << "PC: 0x" << std::hex << m_pc 
-                   << " INST: 0x" << std::hex << (instruction & 0xFFFF)
-                   << " " << m_instruction->get_instruction_name(fields);
-                Log::getInstance().log_instruction(m_pc, instruction & 0xFFFF, 
+                ss << "PC: 0x" << std::hex << m_pc;
+                if (is_32bit) {
+                    ss << " INST: 0x" << std::hex << full_instruction << " (32-bit)";
+                } else {
+                    ss << " INST: 0x" << std::hex << (full_instruction & 0xFFFF) << " (16-bit)";
+                }
+                ss << " " << m_instruction->get_instruction_name(fields);
+                Log::getInstance().log_instruction(m_pc, full_instruction, 
                     m_instruction->get_instruction_name(fields), ss.str());
             }
             
@@ -66,7 +84,8 @@ void CPU::cpu_thread()
             
             // Update PC if not changed by instruction (branch, etc.)
             if (!pc_changed) {
-                m_registers->set_pc(m_pc + 2); // Thumb instructions are 2 bytes
+                // Increment PC based on instruction size
+                m_registers->set_pc(m_pc + (is_32bit ? 4 : 2));
             }
             
             // Update performance counters
