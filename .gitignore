@@ -46,3 +46,6 @@ Makefile
 *.vcd
 *.wlf
 *.wdb
+
+# Generated test reports
+reports/
