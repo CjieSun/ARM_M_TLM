@@ -1,5 +1,6 @@
 #include "Instruction.h"
 #include "Log.h"
+#include <sstream>
 
 Instruction::Instruction(sc_module_name name) : sc_module(name)
 {
@@ -8,27 +9,62 @@ Instruction::Instruction(sc_module_name name) : sc_module(name)
 
 InstructionFields Instruction::decode(uint16_t instruction)
 {
+    // Initialize all fields to known values
     InstructionFields fields = {};
     fields.opcode = instruction;
+    fields.rd = 0xFF;   // Initialize to invalid register
+    fields.rn = 0xFF;   // Initialize to invalid register
+    fields.rm = 0xFF;   // Initialize to invalid register
+    fields.rs = 0xFF;   // Initialize to invalid register (not used marker)
+    fields.imm = 0;
+    fields.cond = 0;
+    fields.s_bit = false;
+    fields.shift_type = 0;
+    fields.shift_amount = 0;
+    fields.alu_op = 0;
+    fields.h1 = false;
+    fields.h2 = false;
+    fields.reg_list = 0;
+    fields.load_store_bit = false;
+    fields.byte_word = 0;
     fields.type = identify_instruction_type(instruction);
     
     // Decode based on instruction type
     switch (fields.type) {
         case INST_BRANCH:
-            return decode_branch(instruction);
+            fields = decode_branch(instruction);
+            break;
         case INST_DATA_PROCESSING:
-            return decode_data_processing(instruction);
+            fields = decode_data_processing(instruction);
+            break;
         case INST_LOAD_STORE:
-            return decode_load_store(instruction);
+            fields = decode_load_store(instruction);
+            break;
         case INST_LOAD_STORE_MULTIPLE:
-            return decode_load_store_multiple(instruction);
+            fields = decode_load_store_multiple(instruction);
+            break;
         case INST_STATUS_REGISTER:
-            return decode_status_register(instruction);
+            fields = decode_status_register(instruction);
+            break;
         case INST_MISCELLANEOUS:
-            return decode_miscellaneous(instruction);
+            fields = decode_miscellaneous(instruction);
+            break;
         default:
             fields.type = INST_UNKNOWN;
             break;
+    }
+    
+    // Debug logging for decode verification
+    if (Log::getInstance().get_log_level() >= LOG_DEBUG) {
+        std::stringstream ss;
+        ss << "DECODE: opcode=0x" << std::hex << fields.opcode;
+        if (fields.rd != 0xFF) ss << " rd=" << std::dec << (int)fields.rd;
+        if (fields.rn != 0xFF) ss << " rn=" << std::dec << (int)fields.rn;
+        if (fields.rm != 0xFF) ss << " rm=" << std::dec << (int)fields.rm;
+        if (fields.rs != 0xFF) ss << " rs=" << std::dec << (int)fields.rs;
+        if (fields.imm != 0) ss << " imm=0x" << std::hex << fields.imm;
+        ss << " type=" << std::dec << fields.type;
+        LOG_DEBUG("INSTRUCTION DECODE: " + ss.str());
     }
     
     return fields;
