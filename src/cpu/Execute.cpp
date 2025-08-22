@@ -16,6 +16,15 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_BRANCH:
             pc_changed = execute_branch(fields);
             break;
+        case INST_BRANCH_COND:
+            pc_changed = execute_branch(fields);
+            break;
+        case INST_BRANCH_UNCOND:
+            pc_changed = execute_branch(fields);
+            break;
+        case INST_BRANCH_LINK:
+            pc_changed = execute_branch(fields);
+            break;
         case INST_DATA_PROCESSING:
             pc_changed = execute_data_processing(fields);
             break;
@@ -32,6 +41,9 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
             pc_changed = execute_miscellaneous(fields);
             break;
         case INST_EXCEPTION:
+            pc_changed = execute_exception(fields);
+            break;
+        case INST_SWI:
             pc_changed = execute_exception(fields);
             break;
         default:
