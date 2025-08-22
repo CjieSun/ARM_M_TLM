@@ -72,95 +72,106 @@ InstructionFields Instruction::decode(uint16_t instruction)
 
 InstructionType Instruction::identify_instruction_type(uint16_t instruction)
 {
-    // ARMv6-M Thumb instruction identification based on encoding patterns
+    // ARMv6-M Thumb instruction identification based on bits 15:10 encoding patterns
+    // According to TRM documentation, opcode is in bits 15:10 (6 bits)
+    uint16_t opcode_field = (instruction >> 10) & 0x3F; // Extract bits 15:10
     
-    // Format 1-2: Move shifted register and Add/subtract (000xx - 001xx)
-    if ((instruction & 0xE000) == 0x0000) {
-        if ((instruction & 0x1800) == 0x1800) {
-            return INST_DATA_PROCESSING; // Add/subtract format
-        }
-        return INST_DATA_PROCESSING; // Move shifted register format
-    }
-    
-    // Format 3: Move/compare/add/subtract immediate (001xx)
-    if ((instruction & 0xE000) == 0x2000) {
-        return INST_DATA_PROCESSING;
-    }
-    
-    // Format 4-5: ALU operations and Hi register operations (010xx)
-    if ((instruction & 0xF000) == 0x4000) {
-        if ((instruction & 0x0400) == 0x0000) {
-            return INST_DATA_PROCESSING; // ALU operations
-        } else {
-            if ((instruction & 0x0300) == 0x0300) {
-                return INST_BRANCH; // BX/BLX instructions
-            }
-            return INST_DATA_PROCESSING; // Hi register operations
+    // Format 1: Move shifted register (000000 - 000101, excluding 000110-000111)
+    if ((opcode_field & 0x38) == 0x00) {
+        if ((opcode_field & 0x06) != 0x06) { // Exclude 000110 and 000111
+            return INST_MOVE_SHIFTED_REG;
         }
     }
     
-    // PC-relative load (01001)
-    if ((instruction & 0xF800) == 0x4800) {
-        return INST_LOAD_STORE;
+    // Format 2: Add/subtract (000110, 000111) 
+    if ((opcode_field & 0x3E) == 0x06) {
+        return INST_ADD_SUB_REG_IMM;
     }
     
-    // Load/store register offset and sign-extended (0101x)
-    if ((instruction & 0xF000) == 0x5000) {
-        return INST_LOAD_STORE;
+    // Format 3: Move/compare/add/subtract immediate (001000 - 001011)
+    if ((opcode_field & 0x3C) == 0x08) {
+        return INST_MOV_CMP_ADD_SUB_IMM;
     }
     
-    // Load/store immediate offset (011xx)
-    if ((instruction & 0xE000) == 0x6000) {
-        return INST_LOAD_STORE;
+    // Format 4: ALU operations (010000)
+    if (opcode_field == 0x10) {
+        return INST_ALU_OPERATIONS;
     }
     
-    // Load/store halfword (1000x)
-    if ((instruction & 0xF000) == 0x8000) {
-        return INST_LOAD_STORE;
+    // Format 5: Hi register operations/branch exchange (010001)
+    if (opcode_field == 0x11) {
+        return INST_HI_REG_BX;
     }
     
-    // SP-relative load/store (1001x)
-    if ((instruction & 0xF000) == 0x9000) {
-        return INST_LOAD_STORE;
+    // Format 6: PC-relative load (01001x)
+    if ((opcode_field & 0x3E) == 0x12) {
+        return INST_LOAD_STORE_REG_OFF; // PC-relative is a special case of load/store
     }
     
-    // Load address (1010x)
-    if ((instruction & 0xF000) == 0xA000) {
-        return INST_DATA_PROCESSING; // ADD to PC/SP
+    // Format 7: Load/store with register offset + sign-extended (0101xx)
+    if ((opcode_field & 0x3C) == 0x14) {
+        // Check specific patterns for sign-extended loads using bits 11:9
+        uint16_t bits_11_9 = (instruction >> 9) & 0x07; // bits 11:9
+        if (bits_11_9 == 0x3 || bits_11_9 == 0x7) { // 011 and 111 patterns are sign-extended
+            return INST_LOAD_STORE_SIGN_EXT; 
+        }
+        return INST_LOAD_STORE_REG_OFF;
     }
     
-    // Add offset to Stack Pointer and PUSH/POP (1011x)
-    if ((instruction & 0xF000) == 0xB000) {
+    // Format 9: Load/store with immediate offset (011xxx)  
+    if ((opcode_field & 0x38) == 0x18) {
+        return INST_LOAD_STORE_IMM_OFF;
+    }
+    
+    // Format 8: Load/store halfword (1000xx)
+    if ((opcode_field & 0x3C) == 0x20) {
+        return INST_LOAD_STORE_HALFWORD;
+    }
+    
+    // Format 11: SP-relative load/store (1001xx)
+    if ((opcode_field & 0x3C) == 0x24) {
+        return INST_LOAD_STORE_SP_REL;
+    }
+    
+    // Format 12: Load address (1010xx)
+    if ((opcode_field & 0x3C) == 0x28) {
+        return INST_LOAD_ADDRESS;
+    }
+    
+    // Format 13: Add offset to Stack Pointer and PUSH/POP (1011xxxx)
+    if ((opcode_field & 0x3C) == 0x2C) {
+        // Check for PUSH/POP: bits 11:9 should be x1xx (bit 9 = 1)
         if ((instruction & 0x0600) == 0x0400) {
-            return INST_LOAD_STORE_MULTIPLE; // PUSH/POP
+            return INST_PUSH_POP;
         }
-        return INST_MISCELLANEOUS; // Add offset to SP
+        return INST_ADD_SP_IMM;
     }
     
-    // Multiple load/store (1100x)
-    if ((instruction & 0xF000) == 0xC000) {
+    // Format 15: Multiple load/store (1100xx)
+    if ((opcode_field & 0x3C) == 0x30) {
         return INST_LOAD_STORE_MULTIPLE;
     }
     
-    // Conditional branch and SWI (1101x)
-    if ((instruction & 0xF000) == 0xD000) {
-        if ((instruction & 0x0F00) == 0x0F00) {
-            return INST_EXCEPTION; // SWI
+    // Format 16: Conditional branch (1101xxxx, but not 11011111)
+    if ((opcode_field & 0x3C) == 0x34) {
+        // Format 17: Software interrupt (11011111)
+        if ((instruction & 0xFF00) == 0xDF00) {
+            return INST_SWI;
         }
-        return INST_BRANCH; // Conditional branch
+        return INST_BRANCH_COND;
     }
     
-    // Unconditional branch (11100)
-    if ((instruction & 0xF800) == 0xE000) {
-        return INST_BRANCH;
+    // Format 18: Unconditional branch (11100xxx)
+    if ((opcode_field & 0x38) == 0x38 && (opcode_field & 0x04) == 0x00) {
+        return INST_BRANCH_UNCOND;
     }
     
-    // Long branch with link (1111x) - 32-bit instruction
-    if ((instruction & 0xF000) == 0xF000) {
-        return INST_BRANCH;
+    // Format 19: Long branch with link (1111xxxx)
+    if ((opcode_field & 0x3C) == 0x3C) {
+        return INST_BRANCH_LINK;
     }
     
-    return INST_DATA_PROCESSING; // Default fallback
+    return INST_UNKNOWN;
 }
 
 InstructionFields Instruction::decode_branch(uint16_t instruction)
