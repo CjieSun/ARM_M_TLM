@@ -43,12 +43,12 @@ enum InstructionType {
 
 // Instruction fields structure
 struct InstructionFields {
-    uint16_t opcode;     // Raw 16-bit instruction
+    uint32_t opcode;     // Raw instruction (16-bit or 32-bit)
     uint8_t rd;          // Destination register
     uint8_t rn;          // First operand register  
     uint8_t rm;          // Second operand register
     uint8_t rs;          // Shift register / third operand
-    uint16_t imm;        // Immediate value
+    uint32_t imm;        // Immediate value (extended for 32-bit instructions)
     uint8_t cond;        // Condition code
     bool s_bit;          // Set flags bit
     uint8_t shift_type;  // Shift type (LSL, LSR, ASR, ROR)
@@ -58,6 +58,7 @@ struct InstructionFields {
     uint16_t reg_list;   // Register list for multiple load/store
     bool load_store_bit; // Load (1) or Store (0)
     uint8_t byte_word;   // Byte (1) or Word (0)
+    bool is_32bit;       // True if 32-bit instruction
     InstructionType type;
 };
 
@@ -68,8 +69,8 @@ public:
     SC_HAS_PROCESS(Instruction);
     Instruction(sc_module_name name);
     
-    // Decode instruction
-    InstructionFields decode(uint16_t instruction);
+    // Decode instruction (handles both 16-bit and 32-bit)
+    InstructionFields decode(uint32_t instruction, bool is_32bit = false);
     
     // Check if instruction is 32-bit (Thumb-2)
     bool is_32bit_instruction(uint16_t first_half);
@@ -97,6 +98,9 @@ private:
     InstructionFields decode_swi(uint16_t instruction);                     // Format 17
     InstructionFields decode_branch_uncond(uint16_t instruction);           // Format 18
     InstructionFields decode_branch_link(uint16_t instruction);             // Format 19
+    
+    // 32-bit instruction decoding
+    InstructionFields decode_32bit_instruction(uint32_t instruction);
     
     // Legacy decode methods for backward compatibility
     InstructionFields decode_branch(uint16_t instruction);
