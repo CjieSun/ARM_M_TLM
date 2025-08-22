@@ -28,6 +28,9 @@ public:
     // Main CPU thread
     void cpu_thread();
 
+    // Reset CPU with proper ARM M-series vector table initialization
+    void reset_from_vector_table();
+
     // TLM-2 interface methods for IRQ
     void b_transport(tlm_generic_payload& trans, sc_time& delay);
     bool get_direct_mem_ptr(tlm_generic_payload& trans, tlm_dmi& dmi_data);
@@ -45,6 +48,7 @@ private:
     
     // Helper methods
     uint32_t fetch_instruction(uint32_t address);
+    uint32_t read_memory_word(uint32_t address);  // Helper to read from memory
     void handle_irq();
 };
 

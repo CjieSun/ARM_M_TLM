@@ -77,13 +77,6 @@ bool Simulator::load_program()
         return false;
     }
     
-    // Set initial PC from memory (reset vector)
-    uint32_t reset_vector = m_memory->read_word(0x00000004);
-    if (reset_vector != 0) {
-        LOG_INFO("Setting initial PC to: 0x" + std::to_string(reset_vector));
-        // Note: In a real implementation, we'd access CPU registers properly
-    }
-    
     LOG_INFO("Program loaded successfully");
     return true;
 }

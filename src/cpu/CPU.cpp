@@ -1,6 +1,7 @@
 #include "CPU.h"
 #include "Performance.h"
 #include "Log.h"
+#include <sstream>
 
 CPU::CPU(sc_module_name name) : 
     sc_module(name),
@@ -28,6 +29,11 @@ CPU::CPU(sc_module_name name) :
 
 void CPU::cpu_thread()
 {
+    // Perform ARM M-series reset with vector table initialization
+    if (m_pc == 0) {  // Only on first start
+        reset_from_vector_table();
+    }
+    
     while (true) {
         try {
             // Handle pending IRQ
@@ -103,6 +109,69 @@ uint32_t CPU::fetch_instruction(uint32_t address)
     
     wait(delay);
     return instruction;
+}
+
+uint32_t CPU::read_memory_word(uint32_t address)
+{
+    tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    uint32_t data = 0;
+    
+    // Set up transaction
+    trans.set_command(TLM_READ_COMMAND);
+    trans.set_address(address);
+    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_byte_enable_ptr(nullptr);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
+    
+    // Call transport via data bus
+    data_bus->b_transport(trans, delay);
+    
+    if (trans.get_response_status() != TLM_OK_RESPONSE) {
+        LOG_ERROR("Memory read failed at address 0x" + 
+                 std::to_string(address));
+        return 0;
+    }
+    
+    wait(delay);
+    return data;
+}
+
+void CPU::reset_from_vector_table()
+{
+    LOG_INFO("Resetting CPU from vector table");
+    
+    // Reset registers to default values first
+    m_registers->reset();
+    
+    // Read initial stack pointer from vector table address 0x0
+    uint32_t initial_sp = read_memory_word(0x00000000);
+    if (initial_sp != 0) {
+        m_registers->set_sp(initial_sp);
+        std::stringstream ss;
+        ss << "Set initial SP from vector table: 0x" << std::hex << initial_sp;
+        LOG_INFO(ss.str());
+    } else {
+        LOG_WARNING("Vector table SP is 0, using default");
+    }
+    
+    // Read reset vector (initial PC) from vector table address 0x4
+    uint32_t reset_vector = read_memory_word(0x00000004);
+    if (reset_vector != 0) {
+        // ARM Thumb mode requires PC to have bit 0 clear for proper execution
+        uint32_t reset_pc = reset_vector & 0xFFFFFFFE;  // Clear bit 0 (Thumb bit)
+        m_registers->set_pc(reset_pc);
+        m_pc = reset_pc;  // Update internal PC copy
+        std::stringstream ss;
+        ss << "Set initial PC from reset vector: 0x" << std::hex << reset_pc 
+           << " (raw vector: 0x" << std::hex << reset_vector << ")";
+        LOG_INFO(ss.str());
+    } else {
+        LOG_WARNING("Reset vector is 0, using default PC");
+    }
 }
 
 void CPU::handle_irq()
