@@ -27,10 +27,18 @@ _start:
     strh r2, [r0, r4]      @ Store halfword
     ldrh r5, [r0, r4]      @ Load halfword
     ldrh r6, [r0, r4]      @ Load halfword (regular load for testing)
+    @ Sign-extended halfword load using register offset
+    movs r4, #8
+    ldr r7, =0x8000        @ Negative halfword when sign-extended
+    strh r7, [r0, r4]
+    ldrsh r7, [r0, r4]     @ Load sign-extended halfword (should be negative)
     
-    movs r7, #0x80         @ Negative byte value
+    movs r7, #0x80         @ Negative byte value (0x80)
     strb r7, [r0, #14]     @ Store signed byte
-    ldrb r0, [r0, #14]     @ Load byte (regular load for testing)
+    ldrb r0, [r0, #14]     @ Load byte (zero-extended)
+    @ Sign-extended byte load using register offset
+    movs r4, #14
+    ldrsb r6, [r0, r4]     @ Load sign-extended byte (should be negative)
     
     @ Test Format 8: Load/store halfword with immediate
     strh r2, [r0, #16]     @ Store halfword immediate offset
@@ -74,7 +82,9 @@ _start:
     
     ldr r7, =0x8000        @ Load 16-bit value
     strh r7, [r1, #8]      @ Store negative halfword
-    ldrh r1, [r1, #8]      @ Load halfword (regular load for testing)
+    ldrh r1, [r1, #8]      @ Load halfword (zero-extended)
+    movs r4, #8
+    ldrsh r2, [r1, r4]     @ Load sign-extended halfword
     
     @ Infinite loop to end test
 end_loop:

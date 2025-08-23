@@ -6,39 +6,112 @@
 
 using namespace sc_core;
 
-// ARM instruction types for ARMv6-M Thumb instruction set
+// ARMv6-M Thumb instruction types (granular, per A5 encoding)
+// Prefix T16_ for 16-bit Thumb, T32_ for 32-bit Thumb encodings
 enum InstructionType {
     INST_UNKNOWN = 0,
-    // Data processing
-    INST_MOVE_SHIFTED_REG,      // Format 1: Move shifted register
-    INST_ADD_SUB_REG_IMM,       // Format 2: Add/subtract register/immediate
-    INST_MOV_CMP_ADD_SUB_IMM,   // Format 3: Move/compare/add/subtract immediate
-    INST_ALU_OPERATIONS,        // Format 4: ALU operations
-    INST_HI_REG_BX,            // Format 5: Hi register operations/branch exchange
-    // Load/store
-    INST_LOAD_STORE_REG_OFF,    // Format 6: Load/store with register offset
-    INST_LOAD_STORE_SIGN_EXT,   // Format 7: Load/store sign-extended byte/halfword
-    INST_LOAD_STORE_HALFWORD,   // Format 8: Load/store halfword
-    INST_LOAD_STORE_IMM_OFF,    // Format 9: Load/store with immediate offset
-    INST_LOAD_STORE_HW_IMM,     // Format 10: Load/store halfword immediate
-    INST_LOAD_STORE_SP_REL,     // Format 11: SP-relative load/store
-    INST_LOAD_ADDRESS,          // Format 12: Load address
-    // Stack and multiple
-    INST_ADD_SP_IMM,           // Format 13: Add offset to Stack Pointer
-    INST_PUSH_POP,             // Format 14: Push/pop registers
-    INST_LOAD_STORE_MULTIPLE,   // Format 15: Multiple load/store
-    // Branch and exception
-    INST_BRANCH_COND,          // Format 16: Conditional branch (was INST_BRANCH)
-    INST_SWI,                  // Format 17: Software interrupt (was INST_EXCEPTION)
-    INST_BRANCH_UNCOND,        // Format 18: Unconditional branch
-    INST_BRANCH_LINK,          // Format 19: Long branch with link
-    // Legacy compatibility
-    INST_BRANCH = INST_BRANCH_COND,
-    INST_DATA_PROCESSING = INST_ALU_OPERATIONS,
-    INST_LOAD_STORE = INST_LOAD_STORE_IMM_OFF,
-    INST_STATUS_REGISTER = INST_UNKNOWN,  // Not used in ARMv6-M Thumb
-    INST_MISCELLANEOUS = INST_ADD_SP_IMM,
-    INST_EXCEPTION = INST_SWI
+
+    // --- T16: Shift (immediate) --- (Format 1)
+    INST_T16_LSL_IMM,           // LSL Rd, Rm, #imm5
+    INST_T16_LSR_IMM,           // LSR Rd, Rm, #imm5
+    INST_T16_ASR_IMM,           // ASR Rd, Rm, #imm5
+
+    // --- T16: Add/Sub register/imm3 --- (Format 2)
+    INST_T16_ADD_REG,           // ADD Rd, Rn, Rm
+    INST_T16_SUB_REG,           // SUB Rd, Rn, Rm
+    INST_T16_ADD_IMM3,          // ADD Rd, Rn, #imm3
+    INST_T16_SUB_IMM3,          // SUB Rd, Rn, #imm3
+
+    // --- T16: Data processing (immediate) --- (Format 3)
+    INST_T16_MOV_IMM,           // MOV Rd, #imm8
+    INST_T16_CMP_IMM,           // CMP Rn, #imm8
+    INST_T16_ADD_IMM8,          // ADD Rd, #imm8
+    INST_T16_SUB_IMM8,          // SUB Rd, #imm8
+
+    // --- T16: Data processing (register) --- (Format 4)
+    INST_T16_AND,               // AND Rd, Rm
+    INST_T16_EOR,               // EOR Rd, Rm
+    INST_T16_LSL_REG,           // LSL Rd, Rm
+    INST_T16_LSR_REG,           // LSR Rd, Rm
+    INST_T16_ASR_REG,           // ASR Rd, Rm
+    INST_T16_ADC,               // ADC Rd, Rm
+    INST_T16_SBC,               // SBC Rd, Rm
+    INST_T16_ROR,               // ROR Rd, Rm
+    INST_T16_TST,               // TST Rn, Rm
+    INST_T16_NEG,               // NEG Rd, Rm
+    INST_T16_CMP_REG,           // CMP Rn, Rm
+    INST_T16_CMN,               // CMN Rn, Rm
+    INST_T16_ORR,               // ORR Rd, Rm
+    INST_T16_MUL,               // MUL Rd, Rm
+    INST_T16_BIC,               // BIC Rd, Rm
+    INST_T16_MVN,               // MVN Rd, Rm
+
+    // --- T16: Hi register operations / BX/BLX --- (Format 5)
+    INST_T16_ADD_HI,            // ADD Rd(H), Rm
+    INST_T16_CMP_HI,            // CMP Rd(H), Rm
+    INST_T16_MOV_HI,            // MOV Rd(H), Rm
+    INST_T16_BX,                // BX Rm
+    INST_T16_BLX,               // BLX Rm (not in M0)
+
+    // --- T16: PC-relative load --- (Format 6)
+    INST_T16_LDR_PC,            // LDR Rd, [PC, #imm]
+
+    // --- T16: Load/store (register offset and sign-extended) --- (Format 7)
+    INST_T16_STR_REG,           // STR Rt, [Rn, Rm]
+    INST_T16_STRH_REG,          // STRH Rt, [Rn, Rm]
+    INST_T16_STRB_REG,          // STRB Rt, [Rn, Rm]
+    INST_T16_LDRSB_REG,         // LDRSB Rt, [Rn, Rm]
+    INST_T16_LDR_REG,           // LDR Rt, [Rn, Rm]
+    INST_T16_LDRH_REG,          // LDRH Rt, [Rn, Rm]
+    INST_T16_LDRB_REG,          // LDRB Rt, [Rn, Rm]
+    INST_T16_LDRSH_REG,         // LDRSH Rt, [Rn, Rm]
+
+    // --- T16: Load/store (immediate) --- (Formats 8,9)
+    INST_T16_STR_IMM,           // STR Rt, [Rn, #imm]
+    INST_T16_LDR_IMM,           // LDR Rt, [Rn, #imm]
+    INST_T16_STRB_IMM,          // STRB Rt, [Rn, #imm]
+    INST_T16_LDRB_IMM,          // LDRB Rt, [Rn, #imm]
+    INST_T16_STRH_IMM,          // STRH Rt, [Rn, #imm]
+    INST_T16_LDRH_IMM,          // LDRH Rt, [Rn, #imm]
+
+    // --- T16: SP-relative load/store --- (Format 11)
+    INST_T16_STR_SP,            // STR Rt, [SP, #imm]
+    INST_T16_LDR_SP,            // LDR Rt, [SP, #imm]
+
+    // --- T16: Load address --- (Format 12)
+    INST_T16_ADD_PC,            // ADD Rd, PC, #imm
+    INST_T16_ADD_SP,            // ADD Rd, SP, #imm
+
+    // --- T16: Add/sub SP immediate --- (Format 13)
+    INST_T16_ADD_SP_IMM7,       // ADD SP, #imm7
+    INST_T16_SUB_SP_IMM7,       // SUB SP, #imm7
+
+    // --- T16: Push/Pop --- (Format 14)
+    INST_T16_PUSH,              // PUSH {reglist, LR}
+    INST_T16_POP,               // POP {reglist, PC}
+
+    // --- T16: Multiple load/store --- (Format 15)
+    INST_T16_STMIA,             // STMIA Rn!, reglist
+    INST_T16_LDMIA,             // LDMIA Rn!, reglist
+
+    // --- T16: Branch/exception --- (Formats 16-19)
+    INST_T16_B_COND,            // B<cond> label
+    INST_T16_SVC,               // SVC #imm8
+    INST_T16_B,                 // B label (unconditional)
+    INST_T16_BKPT,              // BKPT #imm8
+    INST_T16_HINT,              // NOP/WFI/WFE/YIELD/SEV
+
+    // --- T32: (ARMv6-M supports only BL) ---
+    INST_T32_BL,                // BL label
+
+    // Backward-compat aliases (temporary, for incremental refactors)
+    INST_BRANCH_COND = INST_T16_B_COND,
+    INST_BRANCH_UNCOND = INST_T16_B,
+    INST_BRANCH_LINK = INST_T32_BL,
+    INST_EXCEPTION = INST_T16_SVC,
+    INST_SWI = INST_T16_SVC,
+    INST_MISCELLANEOUS = INST_T16_HINT,
+    INST_LOAD_STORE_MULTIPLE = INST_T16_STMIA, // use with reg_list/load_store_bit
 };
 
 // Instruction fields structure
@@ -73,44 +146,12 @@ public:
     InstructionFields decode(uint32_t instruction, bool is_32bit = false);
     
     // Check if instruction is 32-bit (Thumb-2)
-    bool is_32bit_instruction(uint16_t first_half);
-    
-    // Get instruction name for logging
-    const char* get_instruction_name(const InstructionFields& fields);
+    bool is_32bit_instruction(uint32_t instruction);
     
 private:
-    // Decode specific instruction types (ARMv6-M Thumb formats)
-    InstructionFields decode_move_shifted_reg(uint16_t instruction);        // Format 1
-    InstructionFields decode_add_sub_reg_imm(uint16_t instruction);         // Format 2
-    InstructionFields decode_mov_cmp_add_sub_imm(uint16_t instruction);     // Format 3
-    InstructionFields decode_alu_operations(uint16_t instruction);          // Format 4
-    InstructionFields decode_hi_reg_bx(uint16_t instruction);               // Format 5
-    InstructionFields decode_load_store_reg_off(uint16_t instruction);      // Format 6
-    InstructionFields decode_load_store_sign_ext(uint16_t instruction);     // Format 7
-    InstructionFields decode_load_store_halfword(uint16_t instruction);     // Format 8
-    InstructionFields decode_load_store_imm_off(uint16_t instruction);      // Format 9
-    InstructionFields decode_load_store_sp_rel(uint16_t instruction);       // Format 11
-    InstructionFields decode_load_address(uint16_t instruction);            // Format 12
-    InstructionFields decode_add_sp_imm(uint16_t instruction);              // Format 13
-    InstructionFields decode_push_pop(uint16_t instruction);                // Format 14
-    InstructionFields decode_load_store_multiple(uint16_t instruction);     // Format 15
-    InstructionFields decode_branch_cond(uint16_t instruction);             // Format 16
-    InstructionFields decode_swi(uint16_t instruction);                     // Format 17
-    InstructionFields decode_branch_uncond(uint16_t instruction);           // Format 18
-    InstructionFields decode_branch_link(uint16_t instruction);             // Format 19
-    
-    // 32-bit instruction decoding
-    InstructionFields decode_32bit_instruction(uint32_t instruction);
-    
-    // Legacy decode methods for backward compatibility
-    InstructionFields decode_branch(uint16_t instruction);
-    InstructionFields decode_data_processing(uint16_t instruction);
-    InstructionFields decode_load_store(uint16_t instruction);
-    InstructionFields decode_status_register(uint16_t instruction);
-    InstructionFields decode_miscellaneous(uint16_t instruction);
-    
-    // Helper functions
-    InstructionType identify_instruction_type(uint16_t instruction);
+    // Core Thumb instruction decoding functions
+    InstructionFields decode_thumb16_instruction(uint16_t instruction);
+    InstructionFields decode_thumb32_instruction(uint32_t instruction);
 };
 
 #endif // INSTRUCTION_H

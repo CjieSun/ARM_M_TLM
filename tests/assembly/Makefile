@@ -10,16 +10,13 @@ OBJCOPY = $(TOOLCHAIN_PREFIX)objcopy
 OBJDUMP = $(TOOLCHAIN_PREFIX)objdump
 
 # Compiler flags for Cortex-M0 (ARMv6-M)
-CFLAGS = -mcpu=cortex-m0 -mthumb -Wall -Wextra -std=c99 -Os
-ASFLAGS = -mcpu=cortex-m0 -mthumb
+CFLAGS = -mcpu=cortex-m0plus -mthumb -Wall -Wextra -std=c99 -Os
+ASFLAGS = -mcpu=cortex-m0plus -mthumb
 LDFLAGS = -T linker_script.ld -nostdlib
 
 # Test files
-# Original complex tests (may have compilation issues)
-ORIG_TEST_SOURCES = load_store_multiple_test.s miscellaneous_test.s comprehensive_test.s
-
 # Working/fixed tests  
-WORKING_TEST_SOURCES = data_processing_test.s load_store_test.s branch_test.s
+WORKING_TEST_SOURCES = data_processing_test.s load_store_test.s branch_test.s instruction_size_test.s bl_test.s
 
 # Simplified working tests
 SIMPLE_TEST_SOURCES = simple_miscellaneous_test.s simple_load_store_multiple_test.s simple_comprehensive_test.s
@@ -65,25 +62,33 @@ all: $(TEST_HEXS) $(TEST_LISTINGS)
 
 # Run individual tests with the simulator
 run-data-processing: data_processing_test.hex
-	../../build/bin/arm_m_tlm --hex $< --debug
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
 run-load-store: load_store_test.hex
-	../../build/bin/arm_m_tlm --hex $< --debug
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
 run-branch: branch_test.hex
-	../../build/bin/arm_m_tlm --hex $< --debug
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
-run-multiple: load_store_multiple_test.hex
-	../../build/bin/arm_m_tlm --hex $< --debug
+# Run BL test
+run-bl: bl_test.hex
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
-run-misc: miscellaneous_test.hex
-	../../build/bin/arm_m_tlm --hex $< --debug
+# Run instruction size test
+run-instr-size: instruction_size_test.hex
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
-run-comprehensive: comprehensive_test.hex
-	../../build/bin/arm_m_tlm --hex $< --debug
+run-multiple: simple_load_store_multiple_test.hex
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
+
+run-misc: simple_miscellaneous_test.hex
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
+
+run-comprehensive: simple_comprehensive_test.hex
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
 run-c-test: c_test.hex
-	../../build/bin/arm_m_tlm --hex $< --debug
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
 # Run all tests
 run-all: $(TEST_HEXS)

@@ -1,6 +1,20 @@
 #include "Execute.h"
 #include "Performance.h"
 #include "Log.h"
+#include <sstream>
+#include <iomanip>
+
+// Forward declare CPU so we can reference the socket type without including CPU.h
+class CPU;
+
+namespace {
+// Format 32-bit values as 0xhhhhhhhh
+static std::string hex32(uint32_t v) {
+    std::ostringstream oss;
+    oss << "0x" << std::hex << std::nouppercase << std::setw(8) << std::setfill('0') << v;
+    return oss.str();
+}
+}
 
 Execute::Execute(sc_module_name name, Registers* registers) : 
     sc_module(name), m_registers(registers)
@@ -13,31 +27,90 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
     bool pc_changed = false;
     
     switch (fields.type) {
-        case INST_BRANCH:  // Also handles INST_BRANCH_COND due to legacy mapping
+        // Branches
+        case INST_T16_B_COND:
+        case INST_T16_B:
+        case INST_T16_BX:
+        case INST_T16_BLX:
+        case INST_T32_BL:
             pc_changed = execute_branch(fields);
             break;
-        case INST_BRANCH_UNCOND:
-            pc_changed = execute_branch(fields);
-            break;
-        case INST_BRANCH_LINK:
-            pc_changed = execute_branch(fields);
-            break;
-        case INST_DATA_PROCESSING:
+        // Data processing
+        case INST_T16_LSL_IMM:
+        case INST_T16_LSR_IMM:
+        case INST_T16_ASR_IMM:
+        case INST_T16_ADD_REG:
+        case INST_T16_SUB_REG:
+        case INST_T16_ADD_IMM3:
+        case INST_T16_SUB_IMM3:
+        case INST_T16_MOV_IMM:
+        case INST_T16_CMP_IMM:
+        case INST_T16_ADD_IMM8:
+        case INST_T16_SUB_IMM8:
+        case INST_T16_AND:
+        case INST_T16_EOR:
+        case INST_T16_LSL_REG:
+        case INST_T16_LSR_REG:
+        case INST_T16_ASR_REG:
+        case INST_T16_ADC:
+        case INST_T16_SBC:
+        case INST_T16_ROR:
+        case INST_T16_TST:
+        case INST_T16_NEG:
+        case INST_T16_CMP_REG:
+        case INST_T16_CMN:
+        case INST_T16_ORR:
+        case INST_T16_MUL:
+        case INST_T16_BIC:
+        case INST_T16_MVN:
+        case INST_T16_ADD_HI:
+        case INST_T16_CMP_HI:
+        case INST_T16_MOV_HI:
             pc_changed = execute_data_processing(fields);
             break;
-        case INST_LOAD_STORE:
+        case INST_T16_ADD_SP_IMM7:
+        case INST_T16_SUB_SP_IMM7:
+            pc_changed = execute_data_processing(fields);
+            break;
+        // Load/Store
+        case INST_T16_LDR_PC:
+        case INST_T16_STR_REG:
+        case INST_T16_STRH_REG:
+        case INST_T16_STRB_REG:
+        case INST_T16_LDRSB_REG:
+        case INST_T16_LDR_REG:
+        case INST_T16_LDRH_REG:
+        case INST_T16_LDRB_REG:
+        case INST_T16_LDRSH_REG:
+        case INST_T16_STR_IMM:
+        case INST_T16_LDR_IMM:
+        case INST_T16_STRB_IMM:
+        case INST_T16_LDRB_IMM:
+        case INST_T16_STRH_IMM:
+        case INST_T16_LDRH_IMM:
+        case INST_T16_STR_SP:
+        case INST_T16_LDR_SP:
             pc_changed = execute_load_store(fields, data_bus);
             break;
-        case INST_LOAD_STORE_MULTIPLE:
+        case INST_T16_ADD_PC:
+        case INST_T16_ADD_SP:
+            pc_changed = execute_data_processing(fields);
+            break;
+        // Multiple load/store
+        case INST_T16_STMIA:
+        case INST_T16_LDMIA:
+        case INST_T16_PUSH:
+        case INST_T16_POP:
             pc_changed = execute_load_store_multiple(fields, data_bus);
             break;
-        case INST_STATUS_REGISTER:
+        // Status/System (none for v6-M beyond hints)
             pc_changed = execute_status_register(fields);
             break;
-        case INST_MISCELLANEOUS:
+        case INST_T16_HINT:
+        case INST_T16_BKPT:
             pc_changed = execute_miscellaneous(fields);
             break;
-        case INST_EXCEPTION:  // Also handles INST_SWI due to legacy mapping
+        case INST_T16_SVC:
             pc_changed = execute_exception(fields);
             break;
         default:
@@ -50,9 +123,11 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
 
 bool Execute::execute_branch(const InstructionFields& fields)
 {
-    // Check condition for conditional branches
-    if (fields.cond != 0xE && !check_condition(fields.cond)) {
-        return false;  // Condition not met, don't branch
+    // For conditional B only, check condition; BX/BLX/BL are always executed
+    if (fields.type == INST_T16_B_COND) {
+        if (!check_condition(fields.cond)) {
+            return false;  // Condition not met
+        }
     }
     
     uint32_t current_pc = m_registers->get_pc();
@@ -72,25 +147,24 @@ bool Execute::execute_branch(const InstructionFields& fields)
         // Bit 0 indicates Thumb mode (which we always use)
         m_registers->set_pc(new_pc & ~1);
         
-        LOG_DEBUG("BX/BLX to 0x" + std::to_string(new_pc));
-    } else if (fields.alu_op == 1) {
-        // BL instruction (first half already processed)
-        // For simplicity, handle as regular branch for now
-        // In a complete implementation, this would be a 32-bit instruction
-        new_pc = current_pc + 4 + (static_cast<int32_t>(fields.imm) * 2);
-        
-        // Save return address in LR
-        m_registers->write_register(14, current_pc + 4 + 1); // +1 for Thumb bit
+    LOG_DEBUG("BX/BLX to " + hex32(new_pc));
+    } else if (fields.type == INST_T32_BL || fields.alu_op == 1) {
+        // BL instruction (Thumb): PC is current + 4; fields.imm is halfword offset
+        int32_t byte_off = static_cast<int32_t>(fields.imm) * 2;
+        new_pc = current_pc + 4 + byte_off;
+
+        // Save return address in LR (Thumb bit set)
+        m_registers->write_register(14, current_pc + 4 + 1);
         m_registers->set_pc(new_pc);
-        
-        LOG_DEBUG("BL to 0x" + std::to_string(new_pc));
+
+    LOG_DEBUG("BL to " + hex32(new_pc));
     } else {
         // Regular branch (B or B<cond>)
         int32_t offset = static_cast<int32_t>(fields.imm);
         new_pc = current_pc + 4 + offset;
         
         m_registers->set_pc(new_pc);
-        LOG_DEBUG("Branch taken to 0x" + std::to_string(new_pc));
+    LOG_DEBUG("Branch taken to " + hex32(new_pc));
     }
     
     Performance::getInstance().increment_branches_taken();
@@ -107,13 +181,70 @@ bool Execute::execute_data_processing(const InstructionFields& fields)
     
     // Get operands based on instruction format
     if (fields.rm == 0xFF) {
-        // Immediate operand
+        // Immediate operand (Format 3: MOVS/CMP/ADDS/SUBS)
+        if ((fields.opcode & 0xE000) == 0x2000) {
+            uint32_t rn_val = m_registers->read_register(fields.rn);
+            switch (fields.alu_op) {
+                case 0: // MOVS
+                    m_registers->write_register(fields.rd, fields.imm);
+                    if (fields.s_bit) update_flags(fields.imm, false, false);
+                    return false;
+                case 1: { // CMP
+                    uint32_t res = rn_val - fields.imm;
+                    bool c = (rn_val >= fields.imm);
+                    bool v = ((rn_val ^ fields.imm) & (rn_val ^ res)) >> 31;
+                    update_flags(res, c, v);
+                    return false;
+                }
+                case 2: { // ADD
+                    uint32_t res = rn_val + fields.imm;
+                    bool c = (res < rn_val);
+                    bool v = ((rn_val ^ res) & (fields.imm ^ res)) >> 31;
+                    m_registers->write_register(fields.rd, res);
+                    if (fields.s_bit) update_flags(res, c, v);
+                    return false;
+                }
+                case 3: { // SUB
+                    uint32_t res = rn_val - fields.imm;
+                    bool c = (rn_val >= fields.imm);
+                    bool v = ((rn_val ^ fields.imm) & (rn_val ^ res)) >> 31;
+                    m_registers->write_register(fields.rd, res);
+                    if (fields.s_bit) update_flags(res, c, v);
+                    return false;
+                }
+            }
+        }
+        // Fallback: treat as op with immediate
         op1 = m_registers->read_register(fields.rn);
         op2 = fields.imm;
     } else if ((fields.opcode & 0xFC00) == 0x4400) {
-        // Hi register operations (Format 5)
-        op1 = m_registers->read_register(fields.rd);
-        op2 = m_registers->read_register(fields.rm);
+        // Hi register operations (Format 5): ADD/CMP/MOV with high regs
+        uint32_t rd_val = m_registers->read_register(fields.rd);
+        uint32_t rm_val = m_registers->read_register(fields.rm);
+        switch (fields.alu_op & 0x3) {
+            case 0: { // ADD (hi)
+                uint32_t res = rd_val + rm_val;
+                m_registers->write_register(fields.rd, res);
+                // Flags are not affected by ADD (hi)
+                return false;
+            }
+            case 1: { // CMP (hi)
+                uint32_t res = rd_val - rm_val;
+                bool c = (rd_val >= rm_val);
+                bool v = ((rd_val ^ rm_val) & (rd_val ^ res)) >> 31;
+                update_flags(res, c, v);
+                return false;
+            }
+            case 2: { // MOV (hi)
+                m_registers->write_register(fields.rd, rm_val);
+                // Flags not affected
+                return false;
+            }
+            case 3: {
+                // BX/BLX handled in execute_branch via instruction type
+                return false;
+            }
+        }
     } else if ((fields.opcode & 0xF000) == 0xA000) {
         // Load address (Format 12) - ADD PC/SP + immediate
         if (fields.rn == 15) {
@@ -169,15 +300,20 @@ bool Execute::execute_data_processing(const InstructionFields& fields)
         op1 = m_registers->read_register(fields.rn);
         op2 = m_registers->read_register(fields.rm);
     }
+
+    // Handle ADD/SUB SP, #imm7 special (Format 13)
+    if (fields.type == INST_T16_ADD_SP_IMM7 || fields.type == INST_T16_SUB_SP_IMM7) {
+        uint32_t sp = m_registers->read_register(13);
+        uint32_t res = (fields.type == INST_T16_ADD_SP_IMM7) ? (sp + fields.imm) : (sp - fields.imm);
+        m_registers->write_register(13, res);
+        LOG_DEBUG(std::string((fields.type == INST_T16_ADD_SP_IMM7) ? "ADD SP, #" : "SUB SP, #") + std::to_string(fields.imm) + " -> SP=" + hex32(res));
+        return false;
+    }
     
     // Determine operation based on ALU op code
     switch (fields.alu_op) {
-        case 0: // MOV (Format 3) or AND (Format 4)
-            if ((fields.opcode & 0xE000) == 0x2000) {
-                result = op2; // MOV immediate
-            } else {
-                result = op1 & op2; // AND
-            }
+        case 0: // AND (Format 4)
+            result = op1 & op2;
             break;
         case 1: // ADD
             result = op1 + op2;
@@ -258,7 +394,7 @@ bool Execute::execute_load_store(const InstructionFields& fields, void* data_bus
     uint32_t data = 0;
     
     // Calculate effective address based on addressing mode
-    if (fields.rm != 0 && fields.rm != 0xFF) {
+    if (fields.rm != 0xFF) {
         // Register offset addressing
         uint32_t base = m_registers->read_register(fields.rn);
         uint32_t offset = m_registers->read_register(fields.rm);
@@ -311,8 +447,8 @@ bool Execute::execute_load_store(const InstructionFields& fields, void* data_bus
             }
         }
         
-        m_registers->write_register(fields.rd, data);
-        LOG_DEBUG("Load: R" + std::to_string(fields.rd) + " = [0x" + std::to_string(address) + "] = 0x" + std::to_string(data));
+    m_registers->write_register(fields.rd, data);
+    LOG_DEBUG("Load: R" + std::to_string(fields.rd) + " = [" + hex32(address) + "] = " + hex32(data));
     } else {
         // Store operation
         data = m_registers->read_register(fields.rd);
@@ -335,8 +471,8 @@ bool Execute::execute_load_store(const InstructionFields& fields, void* data_bus
             data &= 0xFFFF;
         }
         
-        write_memory(address, data, size, data_bus);
-        LOG_DEBUG("Store: [0x" + std::to_string(address) + "] = R" + std::to_string(fields.rd) + " = 0x" + std::to_string(data));
+    write_memory(address, data, size, data_bus);
+    LOG_DEBUG("Store: [" + hex32(address) + "] = R" + std::to_string(fields.rd) + " = " + hex32(data));
     }
     
     return false;
@@ -362,7 +498,7 @@ bool Execute::execute_load_store_multiple(const InstructionFields& fields, void*
                     } else if (i == 15 && (fields.reg_list & 0x8000)) {
                         // POP PC - this causes a branch
                         m_registers->set_pc(data & ~1); // Clear Thumb bit
-                        LOG_DEBUG("POP PC: 0x" + std::to_string(data));
+                        LOG_DEBUG("POP PC: " + hex32(data));
                         address += 4;
                         m_registers->write_register(13, address); // Update SP
                         return true; // PC changed
@@ -437,6 +573,22 @@ bool Execute::execute_status_register(const InstructionFields& fields)
 
 bool Execute::execute_miscellaneous(const InstructionFields& fields)
 {
+    // Handle Load address (Format 12): ADD Rd, PC/SP, #imm
+    if ((fields.opcode & 0xF000) == 0xA000) {
+        uint32_t op1, op2, result;
+        if (fields.rn == 15) {
+            // PC-relative: align (PC+4) to word boundary per ARMv6-M
+            op1 = (m_registers->get_pc() + 4) & ~3u;
+        } else {
+            // SP-relative
+            op1 = m_registers->read_register(fields.rn);
+        }
+        op2 = fields.imm;
+        result = op1 + op2;
+        m_registers->write_register(fields.rd, result);
+        LOG_DEBUG("ADR address: " + hex32(result));
+    }
+
     if ((fields.opcode & 0xFF00) == 0xB000) {
         // Add offset to Stack Pointer
         uint32_t sp = m_registers->read_register(13);
@@ -449,19 +601,19 @@ bool Execute::execute_miscellaneous(const InstructionFields& fields)
             // SUB SP, immediate  
             result = sp - fields.imm;
         }
-        
+
         m_registers->write_register(13, result);
-        LOG_DEBUG("SP adjusted: SP = 0x" + std::to_string(result));
+        LOG_DEBUG("SP adjusted: SP = " + hex32(result));
     }
-    
+
     return false;
 }
 
 bool Execute::execute_exception(const InstructionFields& fields)
 {
-    // Handle SVC instruction
+    // Simplified exception handling
     LOG_INFO("SVC instruction executed");
-    
+
     // For now, just continue execution
     return false;
 }
@@ -534,16 +686,25 @@ uint32_t Execute::read_memory(uint32_t address, uint32_t size, void* socket)
     trans.set_byte_enable_ptr(nullptr);
     trans.set_dmi_allowed(false);
     trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
-    
-    // Note: This is a simplified implementation
-    // In reality, we'd need to properly handle the socket calling
-    
+
+    // Use the provided initiator socket to perform the transaction
+    auto* bus = static_cast<tlm_utils::simple_initiator_socket<CPU>*>(socket);
+    // Dereference the socket pointer to use operator-> provided by simple_initiator_socket
+    (*bus)->b_transport(trans, delay);
+
+    if (trans.get_response_status() != TLM_OK_RESPONSE) {
+        LOG_ERROR("Data read failed at address " + hex32(address));
+        return 0;
+    }
+
+    wait(delay);
+
     Performance::getInstance().increment_memory_reads();
-    
+
     if (Log::getInstance().get_log_level() >= LOG_TRACE) {
         Log::getInstance().log_memory_access(address, data, size, false);
     }
-    
+
     return data;
 }
 
@@ -561,8 +722,17 @@ void Execute::write_memory(uint32_t address, uint32_t data, uint32_t size, void*
     trans.set_dmi_allowed(false);
     trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
     
-    // Note: This is a simplified implementation
-    
+    auto* bus = static_cast<tlm_utils::simple_initiator_socket<CPU>*>(socket);
+    // Dereference the socket pointer to use operator-> provided by simple_initiator_socket
+    (*bus)->b_transport(trans, delay);
+
+    if (trans.get_response_status() != TLM_OK_RESPONSE) {
+        LOG_ERROR("Data write failed at address " + hex32(address));
+        return;
+    }
+
+    wait(delay);
+
     Performance::getInstance().increment_memory_writes();
     
     if (Log::getInstance().get_log_level() >= LOG_TRACE) {
