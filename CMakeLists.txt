@@ -25,6 +25,7 @@ set(SOURCES
     src/cpu/CPU.cpp
     src/cpu/Registers.cpp
     src/cpu/Instruction.cpp
+    src/cpu/InstructionTables.cpp
     src/cpu/Execute.cpp
     src/memory/Memory.cpp
     src/bus/BusCtrl.cpp
