@@ -1,10 +1,17 @@
 #include "Instruction.h"
+#include "InstructionTables.h"
 #include "Log.h"
 #include <sstream>
 
 Instruction::Instruction(sc_module_name name) : sc_module(name)
 {
     LOG_INFO("Instruction decoder initialized");
+    
+    // Optionally generate instruction tables at startup for debugging
+    if (Log::getInstance().get_log_level() >= LOG_DEBUG) {
+        LOG_DEBUG("Generating instruction encoding tables");
+        generate_instruction_tables();
+    }
 }
 
 InstructionFields Instruction::decode(uint32_t instruction, bool is_32bit)
@@ -130,25 +137,13 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         fields.rn = fields.rd;
         fields.rm = (instruction >> 3) & 0x7;
         fields.alu_op = (instruction >> 6) & 0xF;
-        static const InstructionType table[16] = {
-            /*0*/ INST_T16_AND,
-            /*1*/ INST_T16_EOR,
-            /*2*/ INST_T16_LSL_REG,
-            /*3*/ INST_T16_LSR_REG,
-            /*4*/ INST_T16_ASR_REG,
-            /*5*/ INST_T16_ADC,
-            /*6*/ INST_T16_SBC,
-            /*7*/ INST_T16_ROR,
-            /*8*/ INST_T16_TST,
-            /*9*/ INST_T16_NEG,
-            /*10*/ INST_T16_CMP_REG,
-            /*11*/ INST_T16_CMN,
-            /*12*/ INST_T16_ORR,
-            /*13*/ INST_T16_MUL,
-            /*14*/ INST_T16_BIC,
-            /*15*/ INST_T16_MVN
-        };
-        fields.type = table[fields.alu_op & 0xF];
+        
+        // Use lookup table from InstructionTables.h
+        if (fields.alu_op < thumb16_format4_count) {
+            fields.type = thumb16_format4_table[fields.alu_op].inst_type;
+        } else {
+            fields.type = INST_UNKNOWN;
+        }
         return fields;
     }
     
@@ -207,17 +202,13 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
             case 0b111: // LDRSH (sign-extended)
                 fields.load_store_bit = true; fields.byte_word = 2; fields.alu_op = 3; break;
         }
-        static const InstructionType map_t16_ls_reg[8] = {
-            INST_T16_STR_REG,
-            INST_T16_STRH_REG,
-            INST_T16_STRB_REG,
-            INST_T16_LDRSB_REG,
-            INST_T16_LDR_REG,
-            INST_T16_LDRH_REG,
-            INST_T16_LDRB_REG,
-            INST_T16_LDRSH_REG,
-        };
-        fields.type = map_t16_ls_reg[op3];
+        
+        // Use lookup table from InstructionTables.h
+        if (op3 < thumb16_format7_count) {
+            fields.type = thumb16_format7_table[op3].inst_type;
+        } else {
+            fields.type = INST_UNKNOWN;
+        }
         return fields;
     }
     
@@ -403,4 +394,10 @@ bool Instruction::is_32bit_instruction(uint32_t instruction)
     // ARMv6-M: Only BL is 32-bit (first halfword 11110)
     uint16_t first_half = (uint16_t)(instruction & 0xFFFF);
     return (first_half & 0xF800) == 0xF000;
+}
+
+void Instruction::print_instruction_tables()
+{
+    LOG_INFO("Generating instruction encoding tables");
+    generate_instruction_tables();
 }

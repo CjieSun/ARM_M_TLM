@@ -148,6 +148,9 @@ public:
     // Check if instruction is 32-bit (Thumb-2)
     bool is_32bit_instruction(uint32_t instruction);
     
+    // Generate and print instruction encoding tables
+    void print_instruction_tables();
+    
 private:
     // Core Thumb instruction decoding functions
     InstructionFields decode_thumb16_instruction(uint16_t instruction);
