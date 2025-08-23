@@ -13,7 +13,13 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
     bool pc_changed = false;
     
     switch (fields.type) {
-        case INST_BRANCH:
+        case INST_BRANCH:  // Also handles INST_BRANCH_COND due to legacy mapping
+            pc_changed = execute_branch(fields);
+            break;
+        case INST_BRANCH_UNCOND:
+            pc_changed = execute_branch(fields);
+            break;
+        case INST_BRANCH_LINK:
             pc_changed = execute_branch(fields);
             break;
         case INST_DATA_PROCESSING:
@@ -31,7 +37,7 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_MISCELLANEOUS:
             pc_changed = execute_miscellaneous(fields);
             break;
-        case INST_EXCEPTION:
+        case INST_EXCEPTION:  // Also handles INST_SWI due to legacy mapping
             pc_changed = execute_exception(fields);
             break;
         default:
