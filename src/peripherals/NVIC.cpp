@@ -8,6 +8,7 @@ NVIC::NVIC(sc_module_name name) :
     socket("socket"),
     cpu_socket("cpu_socket"),
     systick_socket("systick_socket"),
+    irq0_socket("irq0_socket"),
     m_iser(0),
     m_icer(0),
     m_ispr(0),
@@ -27,6 +28,11 @@ NVIC::NVIC(sc_module_name name) :
     socket.register_b_transport(this, &NVIC::b_transport);
     socket.register_get_direct_mem_ptr(this, &NVIC::get_direct_mem_ptr);
     socket.register_transport_dbg(this, &NVIC::transport_dbg);
+    
+    // The systick_socket and irq0_socket need separate handlers
+    // For simplicity, I'll create a simple handler that triggers the appropriate interrupts
+    systick_socket.register_b_transport(this, &NVIC::systick_interrupt_handler);
+    irq0_socket.register_b_transport(this, &NVIC::irq0_interrupt_handler);
     
     LOG_INFO("NVIC peripheral initialized");
 }
@@ -272,4 +278,22 @@ unsigned int NVIC::transport_dbg(tlm_generic_payload& trans)
     sc_time delay = SC_ZERO_TIME;
     b_transport(trans, delay);
     return trans.get_data_length();
+}
+
+void NVIC::systick_interrupt_handler(tlm_generic_payload& trans, sc_time& delay)
+{
+    if (trans.get_command() == TLM_WRITE_COMMAND) {
+        LOG_DEBUG("NVIC: SysTick interrupt received");
+        trigger_systick();
+    }
+    trans.set_response_status(TLM_OK_RESPONSE);
+}
+
+void NVIC::irq0_interrupt_handler(tlm_generic_payload& trans, sc_time& delay)
+{
+    if (trans.get_command() == TLM_WRITE_COMMAND) {
+        LOG_DEBUG("NVIC: External IRQ0 interrupt received");
+        trigger_irq(0); // Trigger IRQ0
+    }
+    trans.set_response_status(TLM_OK_RESPONSE);
 }

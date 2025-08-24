@@ -20,6 +20,7 @@ public:
     tlm_utils::simple_initiator_socket<BusCtrl> memory_socket; // Memory
     tlm_utils::simple_initiator_socket<BusCtrl> trace_socket;  // Trace peripheral
     tlm_utils::simple_initiator_socket<BusCtrl> timer_socket;  // Timer peripheral
+    tlm_utils::simple_initiator_socket<BusCtrl> nvic_socket;   // NVIC peripheral
 
     // Constructor
     SC_HAS_PROCESS(BusCtrl);
@@ -37,6 +38,7 @@ private:
         ADDR_MEMORY,    // 0x00000000 - 0x3FFFFFFF
         ADDR_TRACE,     // 0x40000000 - 0x40003FFF  
         ADDR_TIMER,     // 0x40004000 - 0x40007FFF
+        ADDR_NVIC,      // 0xE000E000 - 0xE000EFFF (ARM Cortex-M0 NVIC)
         ADDR_INVALID
     };
     
@@ -50,6 +52,8 @@ private:
     static const uint32_t TRACE_SIZE  = 0x00004000;
     static const uint32_t TIMER_BASE  = 0x40004000;
     static const uint32_t TIMER_SIZE  = 0x00004000;
+    static const uint32_t NVIC_BASE   = 0xE000E000;
+    static const uint32_t NVIC_SIZE   = 0x00001000;
 };
 
 #endif // BUSCTRL_H
