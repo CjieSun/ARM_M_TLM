@@ -5,6 +5,7 @@ Timer::Timer(sc_module_name name) :
     sc_module(name),
     socket("socket"),
     irq_socket("irq_socket"),
+    systick_socket("systick_socket"),
     m_mtime_low(0),
     m_mtime_high(0),
     m_mtimecmp_low(0xFFFFFFFF),
@@ -170,6 +171,26 @@ void Timer::send_irq()
     irq_socket->b_transport(trans, delay);
     
     LOG_INFO("Timer IRQ sent");
+}
+
+void Timer::send_systick()
+{
+    tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    uint32_t systick_signal = 15; // SysTick is exception number 15
+    
+    trans.set_command(TLM_WRITE_COMMAND);
+    trans.set_address(0);
+    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&systick_signal));
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_byte_enable_ptr(nullptr);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
+    
+    systick_socket->b_transport(trans, delay);
+    
+    LOG_INFO("Timer SysTick sent");
 }
 
 bool Timer::get_direct_mem_ptr(tlm_generic_payload& trans, tlm_dmi& dmi_data)

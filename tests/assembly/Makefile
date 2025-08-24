@@ -21,8 +21,11 @@ WORKING_TEST_SOURCES = data_processing_test.s load_store_test.s branch_test.s in
 # Simplified working tests
 SIMPLE_TEST_SOURCES = simple_miscellaneous_test.s simple_load_store_multiple_test.s simple_comprehensive_test.s
 
+# Exception and NVIC tests
+EXCEPTION_TEST_SOURCES = exception_test.s nvic_timer_test.s
+
 # All working tests
-TEST_SOURCES = $(WORKING_TEST_SOURCES) $(SIMPLE_TEST_SOURCES)
+TEST_SOURCES = $(WORKING_TEST_SOURCES) $(SIMPLE_TEST_SOURCES) $(EXCEPTION_TEST_SOURCES)
 C_TEST_SOURCES = c_test.c
 
 TEST_OBJECTS = $(TEST_SOURCES:.s=.o)
@@ -88,6 +91,13 @@ run-comprehensive: simple_comprehensive_test.hex
 	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
 run-c-test: c_test.hex
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
+
+# Run exception tests
+run-exception: exception_test.hex
+	../../build/bin/arm_m_tlm --hex $< --debug --trace
+
+run-nvic-timer: nvic_timer_test.hex
 	../../build/bin/arm_m_tlm --hex $< --debug --trace
 
 # Run all tests
