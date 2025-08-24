@@ -15,6 +15,7 @@ public:
     // TLM sockets
     tlm_utils::simple_target_socket<Timer> socket;      // For register access
     tlm_utils::simple_initiator_socket<Timer> irq_socket; // For IRQ generation
+    tlm_utils::simple_initiator_socket<Timer> systick_socket; // For SysTick generation
 
     // Constructor
     SC_HAS_PROCESS(Timer);
@@ -48,6 +49,7 @@ private:
     void set_mtimecmp(uint64_t time);
     void check_and_trigger_irq();
     void send_irq();
+    void send_systick(); // For SysTick exception
     
     // Register access
     void handle_read(tlm_generic_payload& trans);

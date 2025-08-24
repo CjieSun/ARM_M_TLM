@@ -8,6 +8,7 @@
 #include "BusCtrl.h"
 #include "Trace.h"
 #include "Timer.h"
+#include "NVIC.h"
 #include "Performance.h"
 #include "Log.h"
 
@@ -40,6 +41,7 @@ private:
     BusCtrl* m_bus_ctrl;
     Trace* m_trace;
     Timer* m_timer;
+    NVIC* m_nvic;
     
     // Configuration
     std::string m_hex_file;

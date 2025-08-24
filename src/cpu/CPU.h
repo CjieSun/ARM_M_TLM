@@ -13,6 +13,17 @@
 using namespace sc_core;
 using namespace tlm;
 
+// ARM Cortex-M0 Exception Numbers
+enum ExceptionType {
+    EXCEPTION_RESET = 1,
+    EXCEPTION_NMI = 2,
+    EXCEPTION_HARD_FAULT = 3,
+    EXCEPTION_SVCALL = 11,
+    EXCEPTION_PENDSV = 14,
+    EXCEPTION_SYSTICK = 15,
+    EXCEPTION_IRQ0 = 16  // External interrupts start from 16
+};
+
 class CPU : public sc_module
 {
 public:
@@ -45,11 +56,23 @@ private:
     // Internal state
     bool m_irq_pending;
     uint32_t m_pc;
+    bool m_nmi_pending;
+    bool m_pendsv_pending;
+    bool m_systick_pending;
+    bool m_hardfault_pending;
     
     // Helper methods
     uint32_t fetch_instruction(uint32_t address);
     uint32_t read_memory_word(uint32_t address);  // Helper to read from memory
+    void write_memory_word(uint32_t address, uint32_t data);  // Helper to write to memory
     void handle_irq();
+    
+    // Exception handling methods
+    void handle_exception(ExceptionType exception_type);
+    void trigger_exception(ExceptionType exception_type);
+    uint32_t get_exception_vector_address(ExceptionType exception_type);
+    void push_exception_stack_frame(uint32_t return_address);
+    void check_pending_exceptions();
 };
 
 #endif // CPU_H
