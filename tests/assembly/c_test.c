@@ -1,4 +1,53 @@
 #include <stdint.h>
+#include <stdio.h>
+
+#define TRACE (*(volatile unsigned char *)0x40000000)
+
+int _read(int file, char* ptr, int len) {
+    return 0;
+}
+
+int _close(int fd){
+    return 0;
+}
+
+int _fstat_r(int fd) {
+    return 0;
+}
+
+int _lseek_r(struct _reent *ptr, FILE *fp, long offset, int whence){
+    return 0;
+}
+
+int _isatty_r(struct _reent *ptr, int fd) {
+    return 0;
+}
+
+int _write(int file, const char *ptr, int len) {
+  int x;
+
+  for (x = 0; x < len; x++) {
+    TRACE = *ptr++;
+  }
+
+  return (len);
+}
+
+// Implement puts for printf support
+int puts(const char *s) {
+    const char *p = s;
+    while (*p) {
+        TRACE = *p++;
+    }
+    TRACE = '\n';  // puts automatically adds newline
+    return 1;
+}
+
+// Implement putchar for printf support
+int putchar(int c) {
+    TRACE = (char)c;
+    return c;
+}
 
 // Simple C test to verify basic ARMv6-M instruction functionality
 // This will be compiled to Thumb code and test the simulator
@@ -66,12 +115,15 @@ uint32_t stack_test(uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
     return local_array[0] + local_array[1] + local_array[2] + local_array[3];
 }
 
+
 // Main test function
 int main(void) {
-    // Test 1: Arithmetic operations
+    //Test 1: Arithmetic operations
     uint32_t arith_result = arithmetic_test(0x12345678, 0xABCDEF00);
     result_buffer[7] = arith_result;
-    
+
+    printf("start\r\n");
+
     // Test 2: Memory operations
     memory_test();
     
@@ -97,13 +149,8 @@ int main(void) {
     // Success indicator
     result_buffer[0] = 0x600D;      // "GOOD" in hex
     
-    // Infinite loop (simulator should detect this)
-    while (1) {
-        // NOP equivalent
-        volatile int dummy = 0;
-        (void)dummy;
-    }
-    
+    printf("end\r\n");
+
     return 0;
 }
 

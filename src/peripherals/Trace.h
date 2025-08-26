@@ -10,32 +10,40 @@
 using namespace sc_core;
 using namespace tlm;
 
-class Trace : public sc_module, public tlm_fw_transport_if<>
+class Trace : public sc_module
 {
 public:
-    // TLM target socket
+    /**
+    * @brief Bus socket
+    */
     tlm_utils::simple_target_socket<Trace> socket;
 
-    // Constructor
-    SC_HAS_PROCESS(Trace);
-    Trace(sc_module_name name);
-    
-    // Destructor
-    ~Trace();
+    /**
+    * @brief Constructor
+    * @param name Module name
+    */
+    explicit Trace(sc_core::sc_module_name const &name);
 
-    // TLM-2 interface methods
-    virtual void b_transport(tlm_generic_payload& trans, sc_time& delay);
-    virtual tlm_sync_enum nb_transport_fw(tlm_generic_payload& trans, tlm_phase& phase, sc_time& delay);
-    virtual bool get_direct_mem_ptr(tlm_generic_payload& trans, tlm_dmi& dmi_data);
-    virtual unsigned int transport_dbg(tlm_generic_payload& trans);
+    /**
+    * @brief Destructor
+    */
+    ~Trace() override;
 
 private:
-    std::ofstream m_output_file;
-    bool m_use_xterm;
-    
-    // Helper methods
-    void write_character(char c);
-    void setup_xterm_output();
+
+    // TLM-2 blocking transport method
+    virtual void b_transport(tlm::tlm_generic_payload &trans,
+                                sc_core::sc_time &delay);
+
+    void xtermLaunch(char *slaveName) const;
+
+    void xtermKill();
+
+    void xtermSetup();
+
+    int ptSlave{};
+    int ptMaster{};
+    int xtermPid{};
 };
 
 #endif // TRACE_H
