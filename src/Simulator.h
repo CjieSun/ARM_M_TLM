@@ -10,6 +10,7 @@
 #include "NVIC.h"
 #include "Performance.h"
 #include "Log.h"
+#include "GDBServer.h"
 
 using namespace sc_core;
 
@@ -28,6 +29,8 @@ public:
     void set_log_level(LogLevel level) { Log::getInstance().set_log_level(level); }
     void set_log_file(const std::string& log_file) { Log::getInstance().set_log_file(log_file); }
     void enable_performance_monitoring(bool enable) { m_performance_enabled = enable; }
+    void enable_gdb_server(int port = 3333);
+    void disable_gdb_server();
     
     // Simulation control
     void run_simulation(sc_time duration = SC_ZERO_TIME);
@@ -40,10 +43,12 @@ private:
     BusCtrl* m_bus_ctrl;
     Trace* m_trace;
     NVIC* m_nvic;
+    GDBServer* m_gdb_server;
     
     // Configuration
     std::string m_hex_file;
     bool m_performance_enabled;
+    bool m_gdb_enabled;
     
     // Initialization
     void initialize_components();
