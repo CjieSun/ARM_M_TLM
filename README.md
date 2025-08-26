@@ -35,6 +35,9 @@ This is another ARM cortex-M ISA simulator, this is coded in SystemC + TLM-2. It
    # Load Intel HEX program
    ./bin/arm_m_tlm --hex program.hex --trace
 
+   # Enable GDB debugging
+   ./bin/arm_m_tlm --gdb
+   
    # Show help
    ./bin/arm_m_tlm --help
    ```
@@ -46,7 +49,31 @@ This is another ARM cortex-M ISA simulator, this is coded in SystemC + TLM-2. It
 - `--log <file>`: Specify log file (default: simulation.log)
 - `--debug`: Enable debug-level logging
 - `--trace`: Enable instruction-level tracing
+- `--gdb`: Enable GDB server on default port (3333)
+- `--gdb-port <port>`: Enable GDB server on specified port
 - `--help, -h`: Show usage information
+
+### GDB Debugging
+
+The simulator now supports remote debugging with GDB! Start the simulator with GDB support:
+
+```bash
+# Start GDB server
+./bin/arm_m_tlm --gdb
+
+# In another terminal, connect with GDB
+arm-none-eabi-gdb -ex 'target remote localhost:3333'
+```
+
+Supported GDB features:
+- Register read/write (R0-R15, PSR)
+- Memory read/write
+- Single step execution (`stepi`)
+- Continue execution (`continue`) 
+- Software breakpoints
+- Standard GDB commands
+
+See [docs/GDB_DEBUGGING.md](docs/GDB_DEBUGGING.md) for detailed usage instructions.
 
 ### Example Usage
 ```bash

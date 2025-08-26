@@ -152,16 +152,23 @@ void Simulator::cleanup()
 void Simulator::enable_gdb_server(int port)
 {
     if (m_gdb_server) {
-        LOG_WARNING("GDB server already enabled");
+        LOG_WARNING("GDB server already enabled on port " + std::to_string(port));
+        return;
+    }
+    
+    if (m_gdb_enabled) {
+        LOG_WARNING("GDB server already configured");
         return;
     }
     
     m_gdb_server = new GDBServer("gdb_server", port);
     m_gdb_server->set_cpu(m_cpu);
-    m_cpu->set_gdb_server(m_gdb_server);
+    if (m_cpu) {
+        m_cpu->set_gdb_server(m_gdb_server);
+    }
     m_gdb_enabled = true;
     
-    LOG_INFO("GDB server enabled on port " + std::to_string(port));
+    LOG_INFO("GDB server configured for port " + std::to_string(port));
 }
 
 void Simulator::disable_gdb_server()

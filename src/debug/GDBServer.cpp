@@ -35,12 +35,12 @@ GDBServer::~GDBServer()
 void GDBServer::start_server()
 {
     if (m_server_running) {
-        LOG_WARNING("GDB Server already running");
+        LOG_WARNING("GDB Server already running on port " + std::to_string(m_port));
         return;
     }
     
     if (!setup_server_socket()) {
-        LOG_ERROR("Failed to setup GDB server socket");
+        LOG_ERROR("Failed to setup GDB server socket on port " + std::to_string(m_port));
         return;
     }
     

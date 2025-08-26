@@ -71,9 +71,11 @@ int sc_main(int argc, char* argv[])
         if (gdb_enabled) {
             std::cout << "Waiting for GDB connection..." << std::endl;
             std::cout << "Connect with: arm-none-eabi-gdb -ex 'target remote localhost:" << gdb_port << "'" << std::endl;
+            // Run indefinitely when GDB is enabled to allow debugging
+            sim.run_simulation(SC_ZERO_TIME);  // Run indefinitely 
+        } else {
+            sim.run_simulation(sc_time(1000, SC_US));  // Run for 1ms  
         }
-        
-        sim.run_simulation(sc_time(1000, SC_US));  // Run for 1ms
         
         std::cout << "Simulation completed." << std::endl;
         
