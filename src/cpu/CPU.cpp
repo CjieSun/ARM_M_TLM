@@ -2,7 +2,9 @@
 #include "Execute.h"
 #include "Performance.h"
 #include "Log.h"
+#include "GDBServer.h"
 #include <sstream>
+#include <stdexcept>
 
 CPU::CPU(sc_module_name name) : 
     sc_module(name),
@@ -16,7 +18,10 @@ CPU::CPU(sc_module_name name) :
     m_systick_pending(false),
     m_hardfault_pending(false),
     m_svc_pending(false),
-    m_pending_external_exception(0)
+    m_pending_external_exception(0),
+    m_debug_mode(false),
+    m_single_step(false),
+    m_gdb_server(nullptr)
 {
     // Initialize sub-modules
     m_registers = new Registers("registers");
@@ -44,11 +49,27 @@ void CPU::cpu_thread()
     
     while (true) {
         try {
+            // Debug mode handling - wait at the beginning of each instruction
+            if (m_debug_mode && m_gdb_server) {
+                // Wait for continue signal from GDB
+                m_gdb_server->wait_for_continue();
+                
+                // Check if we should exit due to server stopping
+                if (!m_gdb_server->is_running()) {
+                    break;
+                }
+            }
+            
             // Check for pending exceptions (in priority order)
             check_pending_exceptions();
             
             // Get current PC
             m_pc = m_registers->get_pc();
+            
+            // Check for breakpoints in debug mode
+            if (m_debug_mode && m_gdb_server) {
+                // This will be handled by the GDB server's breakpoint checking
+            }
             
             // Fetch instruction (always fetch 32-bit to check for 32-bit instructions)
             uint32_t instruction_data = fetch_instruction(m_pc);
@@ -69,6 +90,14 @@ void CPU::cpu_thread()
             
             // Update performance counters
             Performance::getInstance().increment_instructions_executed();
+            
+            // Handle single step in debug mode
+            if (m_debug_mode && m_single_step && m_gdb_server) {
+                m_gdb_server->notify_step_complete();
+                m_single_step = false;
+                // Continue waiting for next GDB command
+                continue;
+            }
             
             // Simulate one cycle delay
             wait(1, SC_NS);
@@ -420,4 +449,57 @@ void CPU::write_memory_word(uint32_t address, uint32_t data)
         std::stringstream ss; ss << "Memory write failed at address: 0x" << std::hex << address;
         LOG_ERROR(ss.str());
     }
+}
+
+// Debug interface methods for GDB server
+uint32_t CPU::read_memory_debug(uint32_t address)
+{
+    tlm_generic_payload trans;
+    uint8_t data = 0;
+    sc_time delay = SC_ZERO_TIME;
+    
+    trans.set_command(TLM_READ_COMMAND);
+    trans.set_address(address);
+    trans.set_data_ptr(&data);
+    trans.set_data_length(1);
+    trans.set_streaming_width(1);
+    trans.set_byte_enable_ptr(0);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
+    
+    data_bus->b_transport(trans, delay);
+    
+    if (trans.get_response_status() != TLM_OK_RESPONSE) {
+        throw std::runtime_error("Debug memory read failed");
+    }
+    
+    return static_cast<uint32_t>(data);
+}
+
+void CPU::write_memory_debug(uint32_t address, uint8_t data)
+{
+    tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    
+    trans.set_command(TLM_WRITE_COMMAND);
+    trans.set_address(address);
+    trans.set_data_ptr(&data);
+    trans.set_data_length(1);
+    trans.set_streaming_width(1);
+    trans.set_byte_enable_ptr(0);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
+    
+    data_bus->b_transport(trans, delay);
+    
+    if (trans.get_response_status() != TLM_OK_RESPONSE) {
+        throw std::runtime_error("Debug memory write failed");
+    }
+}
+
+bool CPU::check_breakpoint(uint32_t address) const
+{
+    // This will be called by GDB server to check if there's a breakpoint
+    // The actual breakpoint checking will be done by the GDB server
+    return false;
 }

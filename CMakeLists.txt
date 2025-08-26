@@ -17,6 +17,7 @@ include_directories(src/memory)
 include_directories(src/bus)
 include_directories(src/peripherals)
 include_directories(src/helpers)
+include_directories(src/debug)
 
 # Source files
 set(SOURCES
@@ -32,6 +33,7 @@ set(SOURCES
     src/peripherals/NVIC.cpp
     src/helpers/Performance.cpp
     src/helpers/Log.cpp
+    src/debug/GDBServer.cpp
 )
 
 # Create executable

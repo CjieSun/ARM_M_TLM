@@ -10,6 +10,7 @@
 #include "Instruction.h"
 // Forward declare Execute to avoid circular header inclusion
 class Execute;
+class GDBServer;
 
 using namespace sc_core;
 using namespace tlm;
@@ -53,6 +54,17 @@ public:
     bool get_direct_mem_ptr(tlm_generic_payload& trans, tlm_dmi& dmi_data);
     unsigned int transport_dbg(tlm_generic_payload& trans);
 
+    // Debug interface for GDB server
+    Registers* get_registers() const { return m_registers; }
+    uint32_t read_memory_debug(uint32_t address);
+    void write_memory_debug(uint32_t address, uint8_t data);
+    void set_debug_mode(bool debug) { m_debug_mode = debug; }
+    bool is_debug_mode() const { return m_debug_mode; }
+    void set_single_step(bool step) { m_single_step = step; }
+    bool is_single_step() const { return m_single_step; }
+    bool check_breakpoint(uint32_t address) const;
+    void set_gdb_server(class GDBServer* gdb) { m_gdb_server = gdb; }
+
 private:
     // Sub-modules
     Registers* m_registers;
@@ -68,6 +80,11 @@ private:
     bool m_hardfault_pending;
     bool m_svc_pending;
     uint32_t m_pending_external_exception; // e.g., 16 + IRQ number when pending
+    
+    // Debug state
+    bool m_debug_mode;
+    bool m_single_step;
+    class GDBServer* m_gdb_server;
     
     // Helper methods
     uint32_t fetch_instruction(uint32_t address);

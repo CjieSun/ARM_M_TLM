@@ -9,7 +9,9 @@ Simulator::Simulator(sc_module_name name, const std::string& hex_file) :
     m_memory(nullptr),
     m_bus_ctrl(nullptr),
     m_trace(nullptr),
-    m_nvic(nullptr)
+    m_nvic(nullptr),
+    m_gdb_server(nullptr),
+    m_gdb_enabled(false)
 {
     LOG_INFO("Initializing ARM Cortex-M0 SystemC-TLM Simulator");
     
@@ -89,6 +91,12 @@ void Simulator::run_simulation(sc_time duration)
         Performance::getInstance().start_timing();
     }
     
+    // Start GDB server if enabled
+    if (m_gdb_enabled && m_gdb_server) {
+        m_gdb_server->start_server();
+        m_cpu->set_debug_mode(true);
+    }
+    
     if (duration == SC_ZERO_TIME) {
         // Run indefinitely
         sc_start();
@@ -122,6 +130,11 @@ void Simulator::print_final_report()
 
 void Simulator::cleanup()
 {
+    if (m_gdb_server) {
+        m_gdb_server->stop_server();
+        delete m_gdb_server;
+    }
+    
     delete m_cpu;
     delete m_memory;
     delete m_bus_ctrl;
@@ -133,4 +146,37 @@ void Simulator::cleanup()
     m_bus_ctrl = nullptr;
     m_trace = nullptr;
     m_nvic = nullptr;
+    m_gdb_server = nullptr;
+}
+
+void Simulator::enable_gdb_server(int port)
+{
+    if (m_gdb_server) {
+        LOG_WARNING("GDB server already enabled");
+        return;
+    }
+    
+    m_gdb_server = new GDBServer("gdb_server", port);
+    m_gdb_server->set_cpu(m_cpu);
+    m_cpu->set_gdb_server(m_gdb_server);
+    m_gdb_enabled = true;
+    
+    LOG_INFO("GDB server enabled on port " + std::to_string(port));
+}
+
+void Simulator::disable_gdb_server()
+{
+    if (m_gdb_server) {
+        m_gdb_server->stop_server();
+        delete m_gdb_server;
+        m_gdb_server = nullptr;
+        m_gdb_enabled = false;
+        
+        if (m_cpu) {
+            m_cpu->set_gdb_server(nullptr);
+            m_cpu->set_debug_mode(false);
+        }
+        
+        LOG_INFO("GDB server disabled");
+    }
 }
