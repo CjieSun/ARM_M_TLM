@@ -9,6 +9,10 @@ NVIC::NVIC(sc_module_name name) :
     cpu_socket("cpu_socket"),
     systick_socket("systick_socket"),
     irq0_socket("irq0_socket"),
+    m_stk_ctrl(0),
+    m_stk_load(0),
+    m_stk_val(0),
+    m_stk_calib(0),
     m_iser(0),
     m_icer(0),
     m_ispr(0),
@@ -34,6 +38,9 @@ NVIC::NVIC(sc_module_name name) :
     systick_socket.register_b_transport(this, &NVIC::systick_interrupt_handler);
     irq0_socket.register_b_transport(this, &NVIC::irq0_interrupt_handler);
     
+    // Start SysTick thread
+    SC_THREAD(systick_thread);
+
     LOG_INFO("NVIC peripheral initialized");
 }
 
@@ -64,7 +71,29 @@ void NVIC::handle_read(tlm_generic_payload& trans)
     
     uint32_t value = 0;
     
+    // Normalize to base addresses for 32-bit aliasing (accept +0x00, +0x04, ... within bank)
+    if (address >= NVIC_ISER && address < NVIC_ISER + 0x40) address = NVIC_ISER;
+    if (address >= NVIC_ICER && address < NVIC_ICER + 0x40) address = NVIC_ICER;
+    if (address >= NVIC_ISPR && address < NVIC_ISPR + 0x40) address = NVIC_ISPR;
+    if (address >= NVIC_ICPR && address < NVIC_ICPR + 0x40) address = NVIC_ICPR;
+
     switch (address) {
+        case NVIC_STK_CTRL:
+            *data_ptr = m_stk_ctrl;
+            trans.set_response_status(TLM_OK_RESPONSE);
+            goto log_and_return;
+        case NVIC_STK_LOAD:
+            *data_ptr = m_stk_load & 0x00FFFFFFu;
+            trans.set_response_status(TLM_OK_RESPONSE);
+            goto log_and_return;
+        case NVIC_STK_VAL:
+            *data_ptr = m_stk_val & 0x00FFFFFFu;
+            trans.set_response_status(TLM_OK_RESPONSE);
+            goto log_and_return;
+        case NVIC_STK_CALIB:
+            *data_ptr = m_stk_calib; // minimal model
+            trans.set_response_status(TLM_OK_RESPONSE);
+            goto log_and_return;
         case NVIC_ISER:
             value = m_iser;
             break;
@@ -105,8 +134,11 @@ void NVIC::handle_read(tlm_generic_payload& trans)
     
     *data_ptr = value;
     trans.set_response_status(TLM_OK_RESPONSE);
-    
-    LOG_DEBUG("NVIC read: 0x" + std::to_string(address) + " = 0x" + std::to_string(value));
+log_and_return:
+    {
+        std::stringstream ss; ss << "NVIC read: 0x" << std::hex << address << " = 0x" << *data_ptr;
+        LOG_DEBUG(ss.str());
+    }
 }
 
 void NVIC::handle_write(tlm_generic_payload& trans)
@@ -121,8 +153,33 @@ void NVIC::handle_write(tlm_generic_payload& trans)
     }
     
     uint32_t value = *data_ptr;
+
+    // Normalize to base addresses for 32-bit aliasing (accept +0x00, +0x04, ... within bank)
+    if (address >= NVIC_ISER && address < NVIC_ISER + 0x40) address = NVIC_ISER;
+    if (address >= NVIC_ICER && address < NVIC_ICER + 0x40) address = NVIC_ICER;
+    if (address >= NVIC_ISPR && address < NVIC_ISPR + 0x40) address = NVIC_ISPR;
+    if (address >= NVIC_ICPR && address < NVIC_ICPR + 0x40) address = NVIC_ICPR;
     
     switch (address) {
+        case NVIC_STK_CTRL: {
+            // Bits: ENABLE(0), TICKINT(1), CLKSOURCE(2), COUNTFLAG(16)
+            // COUNTFLAG is cleared on read in real HW; we'll clear bit16 on any write
+            uint32_t old = m_stk_ctrl;
+            m_stk_ctrl = (m_stk_ctrl & (1u<<16)) | (*data_ptr & 0x00010007u);
+            // If ENABLE cleared, also clear COUNTFLAG
+            if ((m_stk_ctrl & 1u) == 0) m_stk_ctrl &= ~(1u<<16);
+            (void)old;
+            break;
+        }
+        case NVIC_STK_LOAD:
+            m_stk_load = *data_ptr & 0x00FFFFFFu;
+            break;
+        case NVIC_STK_VAL:
+            m_stk_val = *data_ptr & 0x00FFFFFFu;
+            break;
+        case NVIC_STK_CALIB:
+            // Read-only; ignore writes
+            break;
         case NVIC_ISER:
             m_iser |= value;  // Set bits
             break;
@@ -166,7 +223,10 @@ void NVIC::handle_write(tlm_generic_payload& trans)
     }
     
     trans.set_response_status(TLM_OK_RESPONSE);
-    LOG_DEBUG("NVIC write: 0x" + std::to_string(address) + " = 0x" + std::to_string(value));
+    {
+        std::stringstream ss; ss << "NVIC write: 0x" << std::hex << address << " = 0x" << value;
+        LOG_DEBUG(ss.str());
+    }
     
     // Update interrupt state after any write
     update_interrupt_state();
@@ -220,6 +280,9 @@ void NVIC::update_interrupt_state()
         if (highest_priority_irq != 0) {
             // Send IRQ signal to CPU (IRQs start at exception number 16)
             send_exception_to_cpu(16 + highest_priority_irq);
+            // Auto-clear the pending bit for level-sensitive modeling to avoid re-trigger storms
+            m_ispr &= ~(1u << highest_priority_irq);
+            m_pending_exceptions &= ~(1u << highest_priority_irq);
         }
     }
 }
@@ -278,6 +341,29 @@ unsigned int NVIC::transport_dbg(tlm_generic_payload& trans)
     sc_time delay = SC_ZERO_TIME;
     b_transport(trans, delay);
     return trans.get_data_length();
+}
+
+void NVIC::systick_thread()
+{
+    while (true) {
+        // Tick granularity: 1 ms in this model for simplicity
+        wait(1, SC_MS);
+        // Only tick when ENABLE is set
+        if (m_stk_ctrl & 1u) {
+            if (m_stk_val == 0) {
+                // Reload behavior
+                m_stk_val = (m_stk_load & 0x00FFFFFFu);
+                // Set COUNTFLAG
+                m_stk_ctrl |= (1u << 16);
+                // If TICKINT is set, raise SysTick exception (15)
+                if (m_stk_ctrl & (1u << 1)) {
+                    trigger_systick();
+                }
+            } else {
+                m_stk_val = (m_stk_val - 1) & 0x00FFFFFFu;
+            }
+        }
+    }
 }
 
 void NVIC::systick_interrupt_handler(tlm_generic_payload& trans, sc_time& delay)

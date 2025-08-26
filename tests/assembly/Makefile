@@ -13,6 +13,7 @@ OBJDUMP = $(TOOLCHAIN_PREFIX)objdump
 CFLAGS = -mcpu=cortex-m0plus -mthumb -Wall -Wextra -std=c99 -Os
 ASFLAGS = -mcpu=cortex-m0plus -mthumb
 LDFLAGS = -T linker_script.ld -nostdlib
+EXPLDFLAGS = -T exception_link.ld -nostdlib
 
 # Test files
 # Working/fixed tests  
@@ -22,16 +23,18 @@ WORKING_TEST_SOURCES = data_processing_test.s load_store_test.s branch_test.s in
 SIMPLE_TEST_SOURCES = simple_miscellaneous_test.s simple_load_store_multiple_test.s simple_comprehensive_test.s
 
 # Exception and NVIC tests
-EXCEPTION_TEST_SOURCES = exception_test.s nvic_timer_test.s
+EXCEPTION_TEST_SOURCES = exception_test.s nvic_timer_test.s systick_test.s
+EXCEPTION_TEST_OBJECTS = $(EXCEPTION_TEST_SOURCES:.s=.o)
+EXCEPTION_ELFS = $(EXCEPTION_TEST_SOURCES:.s=.elf)
 
 # All working tests
-TEST_SOURCES = $(WORKING_TEST_SOURCES) $(SIMPLE_TEST_SOURCES) $(EXCEPTION_TEST_SOURCES)
+TEST_SOURCES = $(WORKING_TEST_SOURCES) $(SIMPLE_TEST_SOURCES)
 C_TEST_SOURCES = c_test.c
+C_TEST_OBJECTS = $(C_TEST_SOURCES:.c=.o)
+C_TEST_ELFS = $(C_TEST_SOURCES:.c=.elf)
 
 TEST_OBJECTS = $(TEST_SOURCES:.s=.o)
-C_TEST_OBJECTS = $(C_TEST_SOURCES:.c=.o)
 TEST_ELFS = $(TEST_SOURCES:.s=.elf)
-C_TEST_ELFS = $(C_TEST_SOURCES:.c=.elf)
 TEST_HEXS = $(TEST_SOURCES:.s=.hex) $(C_TEST_SOURCES:.c=.hex)
 TEST_BINS = $(TEST_SOURCES:.s=.bin) $(C_TEST_SOURCES:.c=.bin)  
 TEST_LISTINGS = $(TEST_SOURCES:.s=.lst) $(C_TEST_SOURCES:.c=.lst)
@@ -47,17 +50,17 @@ all: $(TEST_HEXS) $(TEST_LISTINGS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# Link object to ELF
+# Link exception tests to ELF with exception linker script
+$(EXCEPTION_ELFS): %.elf: %.o exception_link.ld
+	$(LD) $(EXPLDFLAGS) -o $@ $<
+
+# Link other objects to ELF with default linker script
 %.elf: %.o linker_script.ld
 	$(LD) $(LDFLAGS) -o $@ $<
 
 # Convert ELF to Intel HEX
-%.hex: %.elf
+%.hex: %.elf %.lst
 	$(OBJCOPY) -O ihex $< $@
-
-# Convert ELF to binary  
-%.bin: %.elf
-	$(OBJCOPY) -O binary $< $@
 
 # Generate disassembly listing
 %.lst: %.elf

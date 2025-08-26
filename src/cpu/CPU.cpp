@@ -1,4 +1,5 @@
 #include "CPU.h"
+#include "Execute.h"
 #include "Performance.h"
 #include "Log.h"
 #include <sstream>
@@ -13,12 +14,15 @@ CPU::CPU(sc_module_name name) :
     m_nmi_pending(false),
     m_pendsv_pending(false),
     m_systick_pending(false),
-    m_hardfault_pending(false)
+    m_hardfault_pending(false),
+    m_svc_pending(false),
+    m_pending_external_exception(0)
 {
     // Initialize sub-modules
     m_registers = new Registers("registers");
     m_instruction = new Instruction("instruction");
     m_execute = new Execute("execute", m_registers);
+    m_execute->set_cpu(this);
     
     // Bind IRQ socket
     irq_line.register_b_transport(this, &CPU::b_transport);
@@ -96,8 +100,8 @@ uint32_t CPU::fetch_instruction(uint32_t address)
     inst_bus->b_transport(trans, delay);
     
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
-        LOG_ERROR("Instruction fetch failed at address 0x" + 
-                 std::to_string(address));
+        std::stringstream ss; ss << "Instruction fetch failed at address 0x" << std::hex << address;
+        LOG_ERROR(ss.str());
         return 0;
     }
     
@@ -125,8 +129,8 @@ uint32_t CPU::read_memory_word(uint32_t address)
     data_bus->b_transport(trans, delay);
     
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
-        LOG_ERROR("Memory read failed at address 0x" + 
-                 std::to_string(address));
+        std::stringstream ss; ss << "Memory read failed at address 0x" << std::hex << address;
+        LOG_ERROR(ss.str());
         return 0;
     }
     
@@ -171,15 +175,14 @@ void CPU::reset_from_vector_table()
 void CPU::handle_irq()
 {
     LOG_INFO("Handling IRQ");
-    
-    // Save current context
-    uint32_t current_pc = m_registers->get_pc();
-    m_registers->set_lr(current_pc);
-    
-    // Jump to IRQ handler (simplified - should use vector table)
-    m_registers->set_pc(0x00000004);
-    
-    Performance::getInstance().increment_irq_count();
+
+    // If NVIC provided a specific exception number (>=16), use it; otherwise default to IRQ0
+    uint32_t exception_num = (m_pending_external_exception >= EXCEPTION_IRQ0)
+                                 ? m_pending_external_exception
+                                 : EXCEPTION_IRQ0;
+
+    // Save context and vector via standard exception mechanism
+    handle_exception(static_cast<ExceptionType>(exception_num));
 }
 
 void CPU::b_transport(tlm_generic_payload& trans, sc_time& delay)
@@ -213,8 +216,9 @@ void CPU::b_transport(tlm_generic_payload& trans, sc_time& delay)
                 break;
             default:
                 if (exception_type >= EXCEPTION_IRQ0) {
+                    m_pending_external_exception = exception_type;
                     m_irq_pending = true;
-                    LOG_DEBUG("External IRQ " + std::to_string(exception_type - EXCEPTION_IRQ0) + " received");
+                    LOG_DEBUG("External IRQ exception received: " + std::to_string(exception_type));
                 } else {
                     LOG_WARNING("Unknown exception type: " + std::to_string(exception_type));
                 }
@@ -251,6 +255,13 @@ void CPU::check_pending_exceptions()
         m_hardfault_pending = false;
         return;
     }
+
+    // SVCall
+    if (m_svc_pending) {
+        handle_exception(EXCEPTION_SVCALL);
+        m_svc_pending = false;
+        return;
+    }
     
     // SysTick
     if (m_systick_pending) {
@@ -274,6 +285,42 @@ void CPU::check_pending_exceptions()
     }
 }
 
+void CPU::request_svc()
+{
+    m_svc_pending = true;
+}
+
+bool CPU::try_exception_return(uint32_t exc_return)
+{
+    // Handle a minimal EXC_RETURN for Thread mode, return to using MSP: 0xFFFFFFF9
+    if (exc_return == 0xFFFFFFF9) {
+        // Pop the standard exception stack frame (R0-R3, R12, LR, PC, PSR) in reverse
+        uint32_t sp = m_registers->get_sp();
+        uint32_t r0  = read_memory_word(sp);      sp += 4;
+        uint32_t r1  = read_memory_word(sp);      sp += 4;
+        uint32_t r2  = read_memory_word(sp);      sp += 4;
+        uint32_t r3  = read_memory_word(sp);      sp += 4;
+        uint32_t r12 = read_memory_word(sp);      sp += 4;
+        uint32_t lr  = read_memory_word(sp);      sp += 4;
+        uint32_t pc  = read_memory_word(sp);      sp += 4;
+        uint32_t psr = read_memory_word(sp);      sp += 4;
+
+        m_registers->write_register(0, r0);
+        m_registers->write_register(1, r1);
+        m_registers->write_register(2, r2);
+        m_registers->write_register(3, r3);
+        m_registers->write_register(12, r12);
+        m_registers->set_lr(lr);
+        // Ensure Thumb bit is clear in stored PC per our execution model
+        m_registers->set_pc(pc & ~1u);
+        m_registers->set_psr(psr);
+        m_registers->set_sp(sp);
+        LOG_INFO("Exception return performed to PC: 0x" + [] (uint32_t v){ std::stringstream ss; ss<<std::hex<<v; return ss.str(); }(pc));
+        return true;
+    }
+    return false;
+}
+
 void CPU::handle_exception(ExceptionType exception_type)
 {
     LOG_INFO("Handling exception type: " + std::to_string(exception_type));
@@ -291,7 +338,8 @@ void CPU::handle_exception(ExceptionType exception_type)
         // Clear bit 0 (Thumb bit) for proper execution
         handler_address = handler_address & 0xFFFFFFFE;
         m_registers->set_pc(handler_address);
-        LOG_INFO("Jumping to exception handler at: 0x" + std::to_string(handler_address));
+        std::stringstream ss; ss << "Jumping to exception handler at: 0x" << std::hex << handler_address;
+        LOG_INFO(ss.str());
     } else {
         LOG_WARNING("Exception vector is 0, triggering HardFault");
         if (exception_type != EXCEPTION_HARD_FAULT) {
@@ -369,6 +417,7 @@ void CPU::write_memory_word(uint32_t address, uint32_t data)
     data_bus->b_transport(trans, delay);
     
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
-        LOG_ERROR("Memory write failed at address: 0x" + std::to_string(address));
+        std::stringstream ss; ss << "Memory write failed at address: 0x" << std::hex << address;
+        LOG_ERROR(ss.str());
     }
 }

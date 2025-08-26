@@ -7,7 +7,6 @@
 #include "Memory.h"
 #include "BusCtrl.h"
 #include "Trace.h"
-#include "Timer.h"
 #include "NVIC.h"
 #include "Performance.h"
 #include "Log.h"
@@ -40,7 +39,6 @@ private:
     Memory* m_memory;
     BusCtrl* m_bus_ctrl;
     Trace* m_trace;
-    Timer* m_timer;
     NVIC* m_nvic;
     
     // Configuration

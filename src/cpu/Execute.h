@@ -7,6 +7,8 @@
 #include <cstdint>
 #include "Instruction.h"
 #include "Registers.h"
+// Forward declare CPU to avoid circular dependency in headers
+class CPU;
 
 using namespace sc_core;
 using namespace tlm;
@@ -21,12 +23,15 @@ public:
     // Constructor
     SC_HAS_PROCESS(Execute);
     Execute(sc_module_name name, Registers* registers);
+    // Wire back to CPU to trigger synchronous exceptions (e.g., SVC)
+    void set_cpu(CPU* cpu) { m_cpu = cpu; }
     
     // Execute instruction - using void* to avoid circular dependency
     bool execute_instruction(const InstructionFields& fields, void* data_bus);
     
 private:
     Registers* m_registers;
+    CPU* m_cpu { nullptr };
     
     // Execution methods for different instruction types
     bool execute_branch(const InstructionFields& fields);

@@ -14,11 +14,11 @@ SECTIONS
     /* Vector table */
     .vectors :
     {
-        LONG(0x20010000)    /* Initial stack pointer (top of RAM) */
+        LONG(_estack)        /* Initial stack pointer (top of RAM) */
         LONG(_start + 1)    /* Reset vector (Thumb mode) */
         LONG(0)             /* NMI Handler */  
         LONG(0)             /* Hard Fault Handler */
-        . = ALIGN(4);
+        . = ALIGN(32);
     } > FLASH
     
     /* Code section */
@@ -55,14 +55,8 @@ SECTIONS
         _ebss = .;
     } > RAM
     
-    /* Stack */
-    .stack :
-    {
-        . = ALIGN(8);
-        . = . + 1024;  /* 1KB stack */
-        _estack = .;
-    } > RAM
 }
 
-/* Provide stack top symbol */
-_stack_top = ORIGIN(RAM) + LENGTH(RAM);
+/* Define stack top at end of RAM */
+PROVIDE(_estack = ORIGIN(RAM) + LENGTH(RAM));
+PROVIDE(_stack_top = _estack);

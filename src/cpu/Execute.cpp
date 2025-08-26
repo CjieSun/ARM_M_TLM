@@ -1,11 +1,11 @@
 #include "Execute.h"
+#include "CPU.h" // For calling request_svc on SVC execution
 #include "Performance.h"
 #include "Log.h"
 #include <sstream>
 #include <iomanip>
 
-// Forward declare CPU so we can reference the socket type without including CPU.h
-class CPU;
+// CPU is included above for request_svc; we keep using its initiator socket type too
 
 namespace {
 // Format 32-bit values as 0xhhhhhhhh
@@ -145,6 +145,11 @@ bool Execute::execute_branch(const InstructionFields& fields)
         
         // BX/BLX can switch between ARM and Thumb modes
         // Bit 0 indicates Thumb mode (which we always use)
+        // If BX to EXC_RETURN, perform exception return instead of normal branch
+        if (fields.rm == 14 && m_cpu && m_cpu->try_exception_return(new_pc)) {
+            LOG_DEBUG("Exception return via BX LR");
+            return true; // PC updated by exception return
+        }
         m_registers->set_pc(new_pc & ~1);
         
     LOG_DEBUG("BX/BLX to " + hex32(new_pc));
@@ -611,10 +616,17 @@ bool Execute::execute_miscellaneous(const InstructionFields& fields)
 
 bool Execute::execute_exception(const InstructionFields& fields)
 {
-    // Simplified exception handling
-    LOG_INFO("SVC instruction executed");
-
-    // For now, just continue execution
+    // Trigger SVC exception (synchronous)
+    LOG_INFO("SVC instruction executed, requesting SVCall exception");
+    if (m_cpu) {
+        // Ask CPU to raise SVC so it will stack and vector on next check
+        // We can't include CPU.h in this TU (forward-declared), so call via a simple method
+        // The CPU will prioritize SVC appropriately.
+        // Note: No immediate PC change here; CPU's exception logic will handle stacking and branching.
+        m_cpu->request_svc();
+    } else {
+        LOG_WARNING("CPU not connected to Execute; SVC ignored");
+    }
     return false;
 }
 

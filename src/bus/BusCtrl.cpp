@@ -7,7 +7,6 @@ BusCtrl::BusCtrl(sc_module_name name) :
     data_socket("data_socket"),
     memory_socket("memory_socket"),
     trace_socket("trace_socket"),
-    timer_socket("timer_socket"),
     nvic_socket("nvic_socket")
 {
     // Bind target sockets
@@ -43,8 +42,6 @@ BusCtrl::AddressSpace BusCtrl::decode_address(uint32_t address)
         return ADDR_MEMORY;
     } else if (address >= TRACE_BASE && address < TRACE_BASE + TRACE_SIZE) {
         return ADDR_TRACE;
-    } else if (address >= TIMER_BASE && address < TIMER_BASE + TIMER_SIZE) {
-        return ADDR_TIMER;
     } else if (address >= NVIC_BASE && address < NVIC_BASE + NVIC_SIZE) {
         return ADDR_NVIC;
     }
@@ -62,11 +59,6 @@ void BusCtrl::route_transaction(tlm_generic_payload& trans, sc_time& delay, Addr
             // Adjust address for peripheral
             trans.set_address(trans.get_address() - TRACE_BASE);
             trace_socket->b_transport(trans, delay);
-            break;
-        case ADDR_TIMER:
-            // Adjust address for peripheral
-            trans.set_address(trans.get_address() - TIMER_BASE);
-            timer_socket->b_transport(trans, delay);
             break;
         case ADDR_NVIC:
             // NVIC uses absolute ARM Cortex-M addresses, no adjustment needed
@@ -104,9 +96,6 @@ unsigned int BusCtrl::transport_dbg(tlm_generic_payload& trans)
         case ADDR_TRACE:
             trans.set_address(trans.get_address() - TRACE_BASE);
             return trace_socket->transport_dbg(trans);
-        case ADDR_TIMER:
-            trans.set_address(trans.get_address() - TIMER_BASE);
-            return timer_socket->transport_dbg(trans);
         case ADDR_NVIC:
             // NVIC uses absolute addresses, no adjustment needed
             return nvic_socket->transport_dbg(trans);

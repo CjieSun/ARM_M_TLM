@@ -9,7 +9,6 @@ Simulator::Simulator(sc_module_name name, const std::string& hex_file) :
     m_memory(nullptr),
     m_bus_ctrl(nullptr),
     m_trace(nullptr),
-    m_timer(nullptr),
     m_nvic(nullptr)
 {
     LOG_INFO("Initializing ARM Cortex-M0 SystemC-TLM Simulator");
@@ -40,7 +39,6 @@ void Simulator::initialize_components()
     m_memory = new Memory("memory", 0x100000); // 1MB memory
     m_bus_ctrl = new BusCtrl("bus_ctrl");
     m_trace = new Trace("trace");
-    m_timer = new Timer("timer");
     m_nvic = new NVIC("nvic");
     
     LOG_INFO("All components created successfully");
@@ -57,16 +55,11 @@ void Simulator::connect_components()
     // Connect bus controller to peripherals
     m_bus_ctrl->memory_socket.bind(m_memory->socket);
     m_bus_ctrl->trace_socket.bind(m_trace->socket);
-    m_bus_ctrl->timer_socket.bind(m_timer->socket);
     m_bus_ctrl->nvic_socket.bind(m_nvic->socket);
     
     // Connect NVIC to CPU for exception delivery
     m_nvic->cpu_socket.bind(m_cpu->irq_line);
-    
-    // Connect timer interrupts to NVIC
-    m_timer->irq_socket.bind(m_nvic->irq0_socket);        // Regular timer IRQ as external IRQ0
-    m_timer->systick_socket.bind(m_nvic->systick_socket); // SysTick interrupt
-    
+
     LOG_INFO("All components connected successfully");
 }
 
@@ -133,13 +126,11 @@ void Simulator::cleanup()
     delete m_memory;
     delete m_bus_ctrl;
     delete m_trace;
-    delete m_timer;
     delete m_nvic;
     
     m_cpu = nullptr;
     m_memory = nullptr;
     m_bus_ctrl = nullptr;
     m_trace = nullptr;
-    m_timer = nullptr;
     m_nvic = nullptr;
 }

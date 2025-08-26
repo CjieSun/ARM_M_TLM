@@ -29,7 +29,6 @@ set(SOURCES
     src/memory/Memory.cpp
     src/bus/BusCtrl.cpp
     src/peripherals/Trace.cpp
-    src/peripherals/Timer.cpp
     src/peripherals/NVIC.cpp
     src/helpers/Performance.cpp
     src/helpers/Log.cpp

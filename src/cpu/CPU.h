@@ -8,7 +8,8 @@
 
 #include "Registers.h"
 #include "Instruction.h"
-#include "Execute.h"
+// Forward declare Execute to avoid circular header inclusion
+class Execute;
 
 using namespace sc_core;
 using namespace tlm;
@@ -35,6 +36,11 @@ public:
     // Constructor
     SC_HAS_PROCESS(CPU);
     CPU(sc_module_name name);
+    // Allow Execute to signal SVC
+    void request_svc();
+    // Try to perform an exception return when branching to EXC_RETURN magic values
+    // Returns true if an exception return was performed and PC was updated
+    bool try_exception_return(uint32_t exc_return);
 
     // Main CPU thread
     void cpu_thread();
@@ -60,6 +66,8 @@ private:
     bool m_pendsv_pending;
     bool m_systick_pending;
     bool m_hardfault_pending;
+    bool m_svc_pending;
+    uint32_t m_pending_external_exception; // e.g., 16 + IRQ number when pending
     
     // Helper methods
     uint32_t fetch_instruction(uint32_t address);

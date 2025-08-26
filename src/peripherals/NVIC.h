@@ -41,6 +41,11 @@ public:
     void trigger_irq(uint32_t irq_number);
 
 private:
+    // SysTick (Cortex-M0) registers
+    uint32_t m_stk_ctrl;   // 0xE000E010
+    uint32_t m_stk_load;   // 0xE000E014 (24-bit)
+    uint32_t m_stk_val;    // 0xE000E018 (24-bit)
+    uint32_t m_stk_calib;  // 0xE000E01C (RO)
     // NVIC Registers (ARM Cortex-M0)
     uint32_t m_iser;        // 0xE000E100 - Interrupt Set Enable Register
     uint32_t m_icer;        // 0xE000E180 - Interrupt Clear Enable Register  
@@ -59,6 +64,9 @@ private:
     uint32_t m_pending_exceptions;  // Bitmask of pending exceptions
     uint32_t m_active_exceptions;   // Bitmask of active exceptions
     
+    // SysTick ticking thread
+    void systick_thread();
+
     // Helper methods
     void handle_read(tlm_generic_payload& trans);
     void handle_write(tlm_generic_payload& trans);
@@ -74,6 +82,11 @@ private:
         NVIC_ICPR   = 0xE000E280,
         NVIC_IPR0   = 0xE000E400,
         NVIC_IPR7   = 0xE000E41C,
+    // SysTick registers
+    NVIC_STK_CTRL  = 0xE000E010,
+    NVIC_STK_LOAD  = 0xE000E014,
+    NVIC_STK_VAL   = 0xE000E018,
+    NVIC_STK_CALIB = 0xE000E01C,
         NVIC_SHCSR  = 0xE000ED24,
         NVIC_SHPR2  = 0xE000ED1C,
         NVIC_SHPR3  = 0xE000ED20

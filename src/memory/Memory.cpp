@@ -4,6 +4,15 @@
 #include <sstream>
 #include <cstring>
 
+// Simple address map for flat backing store
+static constexpr uint32_t FLASH_BASE   = 0x00000000;
+static constexpr uint32_t FLASH_SIZE   = 0x00080000; // 512KB (per linker)
+static constexpr uint32_t SRAM_BASE    = 0x20000000;
+static constexpr uint32_t SRAM_SIZE    = 0x00010000; // 64KB (per linker)
+// Internal offsets within the flat memory buffer
+static constexpr uint32_t FLASH_OFFSET = 0x00000000;
+static constexpr uint32_t SRAM_OFFSET  = FLASH_OFFSET + FLASH_SIZE; // place SRAM after flash
+
 Memory::Memory(sc_module_name name, uint32_t size) : 
     sc_module(name), socket("socket"), m_size(size)
 {
@@ -17,6 +26,13 @@ Memory::Memory(sc_module_name name, uint32_t size) :
     socket.register_transport_dbg(this, &Memory::transport_dbg);
     
     LOG_INFO("Memory initialized: " + std::to_string(size) + " bytes");
+    LOG_INFO("Memory map: FLASH[0x" + std::to_string(FLASH_BASE) + 
+             ":0x" + std::to_string(FLASH_BASE + FLASH_SIZE - 1) + 
+             "] -> off 0x" + std::to_string(FLASH_OFFSET) + 
+             ", SRAM[0x" + std::to_string(SRAM_BASE) + 
+             ":0x" + std::to_string(SRAM_BASE + SRAM_SIZE - 1) + 
+             "] -> off 0x" + std::to_string(SRAM_OFFSET) + 
+             ", backing size=0x" + std::to_string(m_size));
 }
 
 Memory::~Memory()
@@ -49,13 +65,21 @@ bool Memory::load_hex_file(const std::string& filename)
         switch (record.record_type) {
             case 0x00: // Data record
             {
-                uint32_t address = extended_address + record.address;
-                if (address + record.byte_count <= m_size) {
-                    std::memcpy(&m_memory[address], record.data.data(), record.byte_count);
-                    LOG_DEBUG("Loaded " + std::to_string(record.byte_count) + 
-                             " bytes at 0x" + std::to_string(address));
+                uint32_t abs_addr = extended_address + record.address;
+                // Translate absolute address into backing store offset
+                uint32_t dst_off = 0xFFFFFFFF;
+                if (abs_addr >= FLASH_BASE && abs_addr < FLASH_BASE + FLASH_SIZE) {
+                    dst_off = FLASH_OFFSET + (abs_addr - FLASH_BASE);
+                } else if (abs_addr >= SRAM_BASE && abs_addr < SRAM_BASE + SRAM_SIZE) {
+                    dst_off = SRAM_OFFSET + (abs_addr - SRAM_BASE);
+                }
+
+                if (dst_off != 0xFFFFFFFF && dst_off + record.byte_count <= m_size) {
+                    std::memcpy(&m_memory[dst_off], record.data.data(), record.byte_count);
+                    LOG_DEBUG("HEX load: " + std::to_string(record.byte_count) + " bytes @abs 0x" +
+                              std::to_string(abs_addr) + " -> off 0x" + std::to_string(dst_off));
                 } else {
-                    LOG_WARNING("HEX data outside memory range");
+                    LOG_WARNING("HEX data outside mapped memory: abs=0x" + std::to_string(abs_addr));
                 }
                 break;
             }
@@ -98,86 +122,116 @@ tlm_sync_enum Memory::nb_transport_fw(tlm_generic_payload& trans, tlm_phase& pha
 
 void Memory::handle_read(tlm_generic_payload& trans)
 {
-    uint32_t address = trans.get_address();
+    uint32_t abs_addr = trans.get_address();
     uint32_t length = trans.get_data_length();
     uint8_t* data_ptr = trans.get_data_ptr();
-    
-    if (!is_valid_address(address, length)) {
+
+    // Translate absolute to backing-store offset
+    uint32_t off = 0xFFFFFFFF;
+    if (abs_addr >= FLASH_BASE && abs_addr < FLASH_BASE + FLASH_SIZE) {
+        off = FLASH_OFFSET + (abs_addr - FLASH_BASE);
+    } else if (abs_addr >= SRAM_BASE && abs_addr < SRAM_BASE + SRAM_SIZE) {
+        off = SRAM_OFFSET + (abs_addr - SRAM_BASE);
+    }
+
+    if (off == 0xFFFFFFFF || (off + length) > m_size) {
         trans.set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
-    
-    std::memcpy(data_ptr, &m_memory[address], length);
+
+    std::memcpy(data_ptr, &m_memory[off], length);
     trans.set_response_status(TLM_OK_RESPONSE);
 }
 
 void Memory::handle_write(tlm_generic_payload& trans)
 {
-    uint32_t address = trans.get_address();
+    uint32_t abs_addr = trans.get_address();
     uint32_t length = trans.get_data_length();
     uint8_t* data_ptr = trans.get_data_ptr();
-    
-    if (!is_valid_address(address, length)) {
+
+    // Translate absolute to backing-store offset
+    uint32_t off = 0xFFFFFFFF;
+    if (abs_addr >= FLASH_BASE && abs_addr < FLASH_BASE + FLASH_SIZE) {
+        off = FLASH_OFFSET + (abs_addr - FLASH_BASE);
+    } else if (abs_addr >= SRAM_BASE && abs_addr < SRAM_BASE + SRAM_SIZE) {
+        off = SRAM_OFFSET + (abs_addr - SRAM_BASE);
+    }
+
+    if (off == 0xFFFFFFFF || (off + length) > m_size) {
         trans.set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
+
     
-    std::memcpy(&m_memory[address], data_ptr, length);
+    std::memcpy(&m_memory[off], data_ptr, length);
     trans.set_response_status(TLM_OK_RESPONSE);
 }
 
 bool Memory::is_valid_address(uint32_t address, uint32_t length)
 {
+    // Legacy helper (not used by TLM path anymore), keep simple bounds on backing store
     return (address + length) <= m_size;
 }
 
 uint32_t Memory::read_word(uint32_t address)
 {
-    if (address + 4 > m_size) {
+    // Treat address as absolute; translate
+    uint32_t off = 0xFFFFFFFF;
+    if (address >= FLASH_BASE && address < FLASH_BASE + FLASH_SIZE) {
+        off = FLASH_OFFSET + (address - FLASH_BASE);
+    } else if (address >= SRAM_BASE && address < SRAM_BASE + SRAM_SIZE) {
+        off = SRAM_OFFSET + (address - SRAM_BASE);
+    }
+    if (off == 0xFFFFFFFF || off + 4 > m_size) {
         return 0;
     }
-    
-    return *reinterpret_cast<uint32_t*>(&m_memory[address]);
+
+    return *reinterpret_cast<uint32_t*>(&m_memory[off]);
 }
 
 void Memory::write_word(uint32_t address, uint32_t data)
 {
-    if (address + 4 > m_size) {
+    uint32_t off = 0xFFFFFFFF;
+    if (address >= FLASH_BASE && address < FLASH_BASE + FLASH_SIZE) {
+        off = FLASH_OFFSET + (address - FLASH_BASE);
+    } else if (address >= SRAM_BASE && address < SRAM_BASE + SRAM_SIZE) {
+        off = SRAM_OFFSET + (address - SRAM_BASE);
+    }
+    if (off == 0xFFFFFFFF || off + 4 > m_size) {
         return;
     }
-    
-    *reinterpret_cast<uint32_t*>(&m_memory[address]) = data;
+
+    *reinterpret_cast<uint32_t*>(&m_memory[off]) = data;
 }
 
 bool Memory::get_direct_mem_ptr(tlm_generic_payload& trans, tlm_dmi& dmi_data)
 {
-    // Allow DMI for performance
-    dmi_data.set_dmi_ptr(m_memory);
-    dmi_data.set_start_address(0);
-    dmi_data.set_end_address(m_size - 1);
-    dmi_data.set_granted_access(tlm::tlm_dmi::DMI_ACCESS_READ_WRITE);
-    dmi_data.set_read_latency(sc_time(10, SC_NS));
-    dmi_data.set_write_latency(sc_time(10, SC_NS));
-    
-    return true;
+    // Disable DMI for simplicity with absolute address translation
+    return false;
 }
 
 unsigned int Memory::transport_dbg(tlm_generic_payload& trans)
 {
-    uint32_t address = trans.get_address();
+    uint32_t abs_addr = trans.get_address();
     uint32_t length = trans.get_data_length();
     uint8_t* data_ptr = trans.get_data_ptr();
-    
-    if (!is_valid_address(address, length)) {
+
+    uint32_t off = 0xFFFFFFFF;
+    if (abs_addr >= FLASH_BASE && abs_addr < FLASH_BASE + FLASH_SIZE) {
+        off = FLASH_OFFSET + (abs_addr - FLASH_BASE);
+    } else if (abs_addr >= SRAM_BASE && abs_addr < SRAM_BASE + SRAM_SIZE) {
+        off = SRAM_OFFSET + (abs_addr - SRAM_BASE);
+    }
+    if (off == 0xFFFFFFFF || off + length > m_size) {
         return 0;
     }
-    
+
     if (trans.get_command() == TLM_READ_COMMAND) {
-        std::memcpy(data_ptr, &m_memory[address], length);
+        std::memcpy(data_ptr, &m_memory[off], length);
     } else if (trans.get_command() == TLM_WRITE_COMMAND) {
-        std::memcpy(&m_memory[address], data_ptr, length);
+        std::memcpy(&m_memory[off], data_ptr, length);
     }
-    
+
     return length;
 }
 
