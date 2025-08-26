@@ -16,8 +16,6 @@ public:
     // TLM sockets
     tlm_utils::simple_target_socket<NVIC> socket;      // For register access
     tlm_utils::simple_initiator_socket<NVIC> cpu_socket; // For CPU interrupt delivery
-    tlm_utils::simple_target_socket<NVIC> systick_socket; // For SysTick interrupt
-    tlm_utils::simple_target_socket<NVIC> irq0_socket;    // For external IRQ0
 
     // Constructor
     SC_HAS_PROCESS(NVIC);
@@ -28,10 +26,6 @@ public:
     virtual tlm_sync_enum nb_transport_fw(tlm_generic_payload& trans, tlm_phase& phase, sc_time& delay);
     virtual bool get_direct_mem_ptr(tlm_generic_payload& trans, tlm_dmi& dmi_data);
     virtual unsigned int transport_dbg(tlm_generic_payload& trans);
-
-    // Interrupt handler methods
-    void systick_interrupt_handler(tlm_generic_payload& trans, sc_time& delay);
-    void irq0_interrupt_handler(tlm_generic_payload& trans, sc_time& delay);
 
     // Public interface for triggering exceptions
     void trigger_nmi();

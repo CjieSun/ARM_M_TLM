@@ -7,8 +7,6 @@ NVIC::NVIC(sc_module_name name) :
     sc_module(name),
     socket("socket"),
     cpu_socket("cpu_socket"),
-    systick_socket("systick_socket"),
-    irq0_socket("irq0_socket"),
     m_stk_ctrl(0),
     m_stk_load(0),
     m_stk_val(0),
@@ -32,11 +30,6 @@ NVIC::NVIC(sc_module_name name) :
     socket.register_b_transport(this, &NVIC::b_transport);
     socket.register_get_direct_mem_ptr(this, &NVIC::get_direct_mem_ptr);
     socket.register_transport_dbg(this, &NVIC::transport_dbg);
-    
-    // The systick_socket and irq0_socket need separate handlers
-    // For simplicity, I'll create a simple handler that triggers the appropriate interrupts
-    systick_socket.register_b_transport(this, &NVIC::systick_interrupt_handler);
-    irq0_socket.register_b_transport(this, &NVIC::irq0_interrupt_handler);
     
     // Start SysTick thread
     SC_THREAD(systick_thread);
@@ -168,14 +161,17 @@ void NVIC::handle_write(tlm_generic_payload& trans)
             m_stk_ctrl = (m_stk_ctrl & (1u<<16)) | (*data_ptr & 0x00010007u);
             // If ENABLE cleared, also clear COUNTFLAG
             if ((m_stk_ctrl & 1u) == 0) m_stk_ctrl &= ~(1u<<16);
+            LOG_INFO("NVIC: STK_CTRL write - old=0x" + std::to_string(old) + " new=0x" + std::to_string(m_stk_ctrl));
             (void)old;
             break;
         }
         case NVIC_STK_LOAD:
             m_stk_load = *data_ptr & 0x00FFFFFFu;
+            LOG_INFO("NVIC: STK_LOAD write - value=" + std::to_string(m_stk_load));
             break;
         case NVIC_STK_VAL:
             m_stk_val = *data_ptr & 0x00FFFFFFu;
+            LOG_INFO("NVIC: STK_VAL write - value=" + std::to_string(m_stk_val));
             break;
         case NVIC_STK_CALIB:
             // Read-only; ignore writes
@@ -345,41 +341,29 @@ unsigned int NVIC::transport_dbg(tlm_generic_payload& trans)
 
 void NVIC::systick_thread()
 {
+    LOG_INFO("NVIC: SysTick thread started");
     while (true) {
-        // Tick granularity: 1 ms in this model for simplicity
-        wait(1, SC_MS);
+        // Tick granularity: 1 us in this model for simplicity
+        wait(1, SC_US);
         // Only tick when ENABLE is set
         if (m_stk_ctrl & 1u) {
+            LOG_DEBUG("NVIC: SysTick enabled, VAL=" + std::to_string(m_stk_val) + ", LOAD=" + std::to_string(m_stk_load));
             if (m_stk_val == 0) {
                 // Reload behavior
                 m_stk_val = (m_stk_load & 0x00FFFFFFu);
                 // Set COUNTFLAG
                 m_stk_ctrl |= (1u << 16);
+                LOG_INFO("NVIC: SysTick timeout - reloaded VAL=" + std::to_string(m_stk_val));
                 // If TICKINT is set, raise SysTick exception (15)
                 if (m_stk_ctrl & (1u << 1)) {
                     trigger_systick();
                 }
             } else {
                 m_stk_val = (m_stk_val - 1) & 0x00FFFFFFu;
+                if ((m_stk_val % 100) == 0) { // Log every 100ms
+                    LOG_DEBUG("NVIC: SysTick counting - VAL=" + std::to_string(m_stk_val));
+                }
             }
         }
     }
-}
-
-void NVIC::systick_interrupt_handler(tlm_generic_payload& trans, sc_time& delay)
-{
-    if (trans.get_command() == TLM_WRITE_COMMAND) {
-        LOG_DEBUG("NVIC: SysTick interrupt received");
-        trigger_systick();
-    }
-    trans.set_response_status(TLM_OK_RESPONSE);
-}
-
-void NVIC::irq0_interrupt_handler(tlm_generic_payload& trans, sc_time& delay)
-{
-    if (trans.get_command() == TLM_WRITE_COMMAND) {
-        LOG_DEBUG("NVIC: External IRQ0 interrupt received");
-        trigger_irq(0); // Trigger IRQ0
-    }
-    trans.set_response_status(TLM_OK_RESPONSE);
 }

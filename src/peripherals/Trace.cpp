@@ -38,7 +38,7 @@ void Trace::b_transport(tlm_generic_payload& trans, sc_time& delay)
     }
     
     trans.set_response_status(TLM_OK_RESPONSE);
-    delay += sc_time(1, SC_US); // Simulate peripheral delay
+    //delay += sc_time(1, SC_US); // Simulate peripheral delay
 }
 
 tlm_sync_enum Trace::nb_transport_fw(tlm_generic_payload& trans, tlm_phase& phase, sc_time& delay)

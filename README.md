@@ -132,42 +132,27 @@ Memory map (key regions)
     0xE000ED24	SHCSR (System Handler Control & State)
 
 2.1 CPU
-The ISS simulates a single hardware thread (HART) and includes
-privileged instructions. It is divided in three modules: Instruction,
-Execute and Registers:
+The ISS simulates a single hardware thread (HART) and includes privileged instructions. It is divided in three modules: Instruction, Execute and Registers:
 • Instruction Decodes instructions and checks for extensions.
 • Execute Executes instructions, accessing registers and memory and performing operations. 
 • Registers Implements the register file for the entire CPU, including general-purpose registers (r0-r31), Program counter(pc) and all necessary entries in Control and Status Registers (CSR) registers.
-This CPU is a minimal, fully functional model with a end-less
-loop fetching and executing instructions without pipeline, branch
-predictions or any other optimization technique. All instructions
-are executed in one single cycle, but it can be easy customized to
-per instruction cycle count.
-The Execute module implements each instruction with a class
-method that receives the instruction register. These methods perform all necessary steps to execute the instruction. In case of a
-branch instruction, these methods are able to change the PC value.
-For Load/Store instructions, the methods are in charge to access
-the required memory address.
-The CPU is designed following Harvard architecture, hence the
-ISS has separate TLM sockets to interface with external modules:
+This CPU is a minimal, fully functional model with a end-less loop fetching and executing instructions without pipeline, branch
+predictions or any other optimization technique. All instructions are executed in one single cycle, but it can be easy customized to per instruction cycle count.
+The Execute module implements each instruction with a class method that receives the instruction register. These methods perform all necessary steps to execute the instruction. In case of a branch instruction, these methods are able to change the PC value.
+For Load/Store instructions, the methods are in charge to access the required memory address.
+The CPU is designed following Harvard architecture, hence the ISS has separate TLM sockets to interface with external modules:
 • Data bus: Simple initiator socket to access data memory.
 • Instruction bus: Simple initiator socket to access instruction memory.
 • IRQ line: Simple target socket to signal external IRQs.
 2.2 Bus Controller
-The simulator also includes a Bus controller in charge of the interconnection of all modules. The bus controller decodes the accesses
-address and does the communication to the proper module. In the actual status of the project, it contains two target sockets (instruction and data buses) and three initiator sockets: Memory, Trace and Timer modules.
-2.3 Peripherals
-The Memory module simulates a simple RAM memory, which is the
-main memory of the SoC, acting as instruction memory and data
-memory. This module can read a binary file in Intel HEX format
-obtained from the .elf file and load it to be the main program for
-the ISS. This module has a Simple target socket to be accessed that
-supports DMI to increase simulation speed.
-NVIC (Nested Vectored Interrupt Controller): Provides ARMv6‑M system handlers and external interrupt control. This simulator models:
+The simulator also includes a Bus controller in charge of the interconnection of all modules. The bus controller decodes the accesses address and does the communication to the proper module. In the actual status of the project, it contains two target sockets (instruction and data buses) and three initiator sockets: Memory, Trace and Timer modules.
+2.3 Memory
+The Memory module simulates a simple RAM memory, which is the main memory of the SoC, acting as instruction memory and data memory. This module can read a binary file in Intel HEX format obtained from the .elf file and load it to be the main program for the ISS. This module has a Simple target socket to be accessed that supports DMI to increase simulation speed.
+2.4 Peripherals
+ NVIC (Nested Vectored Interrupt Controller): Provides ARMv6‑M system handlers and external interrupt control. This simulator models:
   • SysTick timer via SysTick CTRL/LOAD/VAL/CALIB at 0xE000E010..0xE000E01C
   • External IRQ enable/pending via ISER/ICER/ISPR/ICPR
   • System handler priorities via SHPR2/SHPR3 and SHCSR
-
 Using SysTick (Cortex‑M0/M0+ compatible):
   1) Write LOAD with a 24‑bit reload value (N‑1)
   2) Optionally clear VAL by writing any value
@@ -176,24 +161,9 @@ Using SysTick (Cortex‑M0/M0+ compatible):
      - Bit1 TICKINT = 1 to generate exception 15
      - Bit2 CLKSOURCE = 1 (internal clock)
   4) Provide a SysTick_Handler in the vector table (entry 15)
-The Trace module is a very simple tracing device, that outputs
-through a xterm window the characters received. This module is
-intended as a basic mimic of the ITM module of Cortex-M CPUs
-[10]. Figure 2 shows the simulator running with an xterm windows
-as output console.
-Two other modules are included in the simulator: Performance
-and Log. The Performance module take statistics of the simulation,
-like instructions executed, registers accessed, memory accesses, etc.
-It dumps this information when the simulation ends. The other
-module allows the simulator to create a log file with different levels
-of information.
-At maximum level of logging, each instruction executed is logged
-into the file with its name, address, time and register values or
-addresses accessed. The log file at maximum debug level shows
-information about the current time, PC value and the instruction
-executed. It also prints the values of the registers used. Figure 3
-shows a real executed log file.
-The log file at maximum debug level shows information about the
-current time, PC value and the instruction executed. It also prints
-the values of the registers used. Figure 3 shows a real executed log
-file.
+The Trace module is a very simple tracing device, that outputs through a xterm window the characters received. This module is intended as a basic mimic of the ITM module of Cortex-M CPUs. Figure 2 shows the simulator running with an xterm windows as output console.
+2.5 Helper
+Two other modules are included in the simulator: Performance and Log. The Performance module take statistics of the simulation, like instructions executed, registers accessed, memory accesses, etc.
+It dumps this information when the simulation ends. The other module allows the simulator to create a log file with different levels of information.
+At maximum level of logging, each instruction executed is logged into the file with its name, address, time and register values or addresses accessed. The log file at maximum debug level shows information about the current time, PC value and the instruction executed. It also prints the values of the registers used. Figure 3 shows a real executed log file.
+The log file at maximum debug level shows information about the current time, PC value and the instruction executed. It also prints the values of the registers used. Figure 3 shows a real executed log file.
