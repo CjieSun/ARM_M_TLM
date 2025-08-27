@@ -382,10 +382,18 @@ std::string GDBServer::handle_read_register(const std::string& regnum_hex)
         value = regs->get_pc();
     } else if (regnum == 16) {
         value = regs->get_psr();
-    } else if (regnum == 17 || regnum == 18) { // MSP/PSP
-        value = regs->get_sp();
-    } else if (regnum >= 19 && regnum <= 22) { // PRIMASK, BASEPRI, FAULTMASK, CONTROL
+    } else if (regnum == 17) { // MSP
+        value = regs->get_msp();
+    } else if (regnum == 18) { // PSP
+        value = regs->get_psp();
+    } else if (regnum == 19) { // PRIMASK
+        value = regs->get_primask();
+    } else if (regnum == 20) { // BASEPRI - not implemented, return 0
         value = 0;
+    } else if (regnum == 21) { // FAULTMASK - not implemented, return 0
+        value = 0;
+    } else if (regnum == 22) { // CONTROL
+        value = regs->get_control();
     } else {
         value = 0;
     }
@@ -411,8 +419,18 @@ std::string GDBServer::handle_write_register(const std::string& packet)
         regs->set_pc(value);
     } else if (regnum == 16) {
         regs->set_psr(value);
-    } else if (regnum == 17 || regnum == 18) {
-        regs->set_sp(value);
+    } else if (regnum == 17) { // MSP
+        regs->set_msp(value);
+    } else if (regnum == 18) { // PSP
+        regs->set_psp(value);
+    } else if (regnum == 19) { // PRIMASK
+        regs->set_primask(value);
+    } else if (regnum == 20) { // BASEPRI - not implemented, ignore
+        // ignore
+    } else if (regnum == 21) { // FAULTMASK - not implemented, ignore
+        // ignore
+    } else if (regnum == 22) { // CONTROL
+        regs->set_control(value);
     } else {
         // ignore others
     }

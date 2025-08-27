@@ -24,11 +24,50 @@ public:
     uint32_t get_psr() const { return m_psr; }
     void set_psr(uint32_t psr) { m_psr = psr; }
     
-    uint32_t get_sp() const { return m_sp; }
-    void set_sp(uint32_t sp) { m_sp = sp; }
+    uint32_t get_sp() const { return get_current_sp(); }
+    void set_sp(uint32_t sp) { set_current_sp(sp); }
     
     uint32_t get_lr() const { return m_lr; }
     void set_lr(uint32_t lr) { m_lr = lr; }
+    
+    // Special register access for ARM Cortex-M
+    uint32_t get_primask() const { return m_primask; }
+    void set_primask(uint32_t primask) { m_primask = primask & 0x1; }  // Only bit 0 is valid
+    
+    uint32_t get_control() const { return m_control; }
+    void set_control(uint32_t control) { m_control = control & 0x3; }  // Only bits 1-0 are valid
+    
+    // Stack pointer management (MSP/PSP based on CONTROL.SPSEL)
+    uint32_t get_msp() const { return m_msp; }
+    void set_msp(uint32_t msp) { m_msp = msp; }
+    
+    uint32_t get_psp() const { return m_psp; }
+    void set_psp(uint32_t psp) { m_psp = psp; }
+    
+    // Current stack pointer based on CONTROL.SPSEL
+    uint32_t get_current_sp() const { return (m_control & 0x2) ? m_psp : m_msp; }
+    void set_current_sp(uint32_t sp) {
+        if (m_control & 0x2) {
+            m_psp = sp;
+        } else {
+            m_msp = sp;
+        }
+    }
+    
+    // Interrupt masking state
+    bool interrupts_enabled() const { return (m_primask & 0x1) == 0; }
+    void enable_interrupts() { m_primask &= ~0x1; }
+    void disable_interrupts() { m_primask |= 0x1; }
+    
+    // Privilege level
+    bool is_privileged() const { return (m_control & 0x1) == 0; }
+    void set_privileged(bool privileged) { 
+        if (privileged) {
+            m_control &= ~0x1;
+        } else {
+            m_control |= 0x1;
+        }
+    }
     
     // PSR flag access
     bool get_n_flag() const { return (m_psr >> 31) & 1; }
@@ -55,10 +94,16 @@ public:
 private:
     // ARM Cortex-M0 registers (R0-R12)
     uint32_t m_gpr[13];  // General Purpose Registers R0-R12
-    uint32_t m_sp;       // Stack Pointer (R13)
+    uint32_t m_sp;       // Stack Pointer (R13) - deprecated, use m_msp/m_psp
     uint32_t m_lr;       // Link Register (R14)  
     uint32_t m_pc;       // Program Counter (R15)
-    uint32_t m_psr;      // Program Status Register
+    uint32_t m_psr;      // Program Status Register (xPSR)
+    
+    // ARM Cortex-M special registers
+    uint32_t m_primask;  // PRIMASK - interrupt mask
+    uint32_t m_control;  // CONTROL - privilege level and stack selection
+    uint32_t m_msp;      // Main Stack Pointer
+    uint32_t m_psp;      // Process Stack Pointer
 };
 
 #endif // REGISTERS_H
