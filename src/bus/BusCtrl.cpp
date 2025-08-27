@@ -66,9 +66,13 @@ void BusCtrl::route_transaction(tlm_generic_payload& trans, sc_time& delay, Addr
             break;
         case ADDR_INVALID:
         default:
-            LOG_WARNING("Invalid address access: 0x" + std::to_string(trans.get_address()));
+        {
+            std::stringstream ss;
+            ss << "Invalid address access: 0x" << std::hex << trans.get_address();
+            LOG_WARNING(ss.str());
             trans.set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
             break;
+        }
     }
 }
 

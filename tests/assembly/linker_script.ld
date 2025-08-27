@@ -30,10 +30,13 @@ SECTIONS
         *(.rodata)
         *(.rodata*)
         . = ALIGN(4);
+        _etext = .;
     } > FLASH
-    
+
+    _sidata = _etext;
+
     /* Initialized data */
-    .data :
+    .data : AT ( _sidata )
     {
         . = ALIGN(4);
         _sdata = .;
@@ -41,8 +44,8 @@ SECTIONS
         *(.data*)
         . = ALIGN(4);
         _edata = .;
-    } > RAM AT > FLASH
-    
+    } > RAM
+
     /* Uninitialized data */
     .bss :
     {

@@ -473,9 +473,6 @@ std::string GDBServer::handle_read_memory(const std::string& addr_len)
     for (uint32_t i = 0; i < length; i++) {
         try {
             uint32_t data = m_cpu->read_memory_debug(address + i);
-            if (i == 0 && length <= 64) { // Log first few bytes of small reads
-                LOG_DEBUG("GDB read memory @0x" + to_hex(address + i, 8) + " -> 0x" + to_hex(static_cast<uint8_t>(data), 2));
-            }
             response += to_hex(static_cast<uint8_t>(data));
         } catch (...) {
             return "E03";

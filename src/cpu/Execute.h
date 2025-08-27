@@ -41,6 +41,7 @@ private:
     bool execute_status_register(const InstructionFields& fields);
     bool execute_miscellaneous(const InstructionFields& fields);
     bool execute_exception(const InstructionFields& fields);
+    bool execute_extend(const InstructionFields& fields);
     
     // Helper methods
     uint32_t compute_operand2(const InstructionFields& fields);

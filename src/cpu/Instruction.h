@@ -89,6 +89,9 @@ enum InstructionType {
     // --- T16: Push/Pop --- (Format 14)
     INST_T16_PUSH,              // PUSH {reglist, LR}
     INST_T16_POP,               // POP {reglist, PC}
+    
+    // --- T16: Extend instructions --- (Format 12 subset)
+    INST_T16_EXTEND,            // SXTH, SXTB, UXTH, UXTB
 
     // --- T16: Multiple load/store --- (Format 15)
     INST_T16_STMIA,             // STMIA Rn!, reglist

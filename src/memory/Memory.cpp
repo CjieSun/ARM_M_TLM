@@ -162,11 +162,6 @@ void Memory::handle_write(tlm_generic_payload& trans)
         return;
     }
 
-    // Log stack writes for debugging
-    if (abs_addr >= 0x20000000 && abs_addr <= 0x20010000 && length <= 8) {
-        LOG_DEBUG("Memory write @0x" + std::to_string(abs_addr) + " len=" + std::to_string(length) + " data=0x" + std::to_string(*reinterpret_cast<uint32_t*>(data_ptr)));
-    }
-    
     std::memcpy(&m_memory[off], data_ptr, length);
     trans.set_response_status(TLM_OK_RESPONSE);
 }

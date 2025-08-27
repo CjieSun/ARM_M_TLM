@@ -3,6 +3,25 @@
 
 #define TRACE (*(volatile unsigned char *)0x40000000)
 
+// Forward declarations for linker script symbols
+extern uint32_t _sidata, _sdata, _edata, _sbss, _ebss;
+
+void _init_data(void) {
+    volatile uint32_t *src = &_sidata;
+    volatile uint32_t *dst = &_sdata;
+
+    // Copy data section from Flash to RAM
+    while (dst < &_edata) {
+        *dst++ = *src++;
+    }
+
+    // Zero out the BSS section
+    dst = &_sbss;
+    while (dst < &_ebss) {
+        *dst++ = 0;
+    }
+}
+
 int _read(int file, char* ptr, int len) {
     return 0;
 }
@@ -115,7 +134,6 @@ uint32_t stack_test(uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
     return local_array[0] + local_array[1] + local_array[2] + local_array[3];
 }
 
-
 // Main test function
 int main(void) {
     //Test 1: Arithmetic operations
@@ -156,6 +174,7 @@ int main(void) {
 
 // Entry point for bare-metal C code
 void _start(void) {
+    _init_data();
     main();
     // Infinite loop in case main returns
     while (1) {

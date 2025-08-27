@@ -270,6 +270,24 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
     
     // Format 12: Add offset to Stack Pointer and PUSH/POP (1011xxxx)
     if ((opcode_field & 0x3C) == 0x2C) {
+        // First check for extend/pack instructions: 1011001000xxxxxx (0xB200-0xB2FF)
+        if ((instruction & 0xFF00) == 0xB200) {
+            // Extend instructions: SXTH, SXTB, UXTH, UXTB
+            fields.rd = instruction & 0x7;
+            fields.rm = (instruction >> 3) & 0x7;
+            uint32_t op = (instruction >> 6) & 0x3;
+            switch (op) {
+                case 0: // SXTH
+                case 1: // SXTB  
+                case 2: // UXTH
+                case 3: // UXTB
+                    fields.alu_op = op;
+                    fields.type = INST_T16_EXTEND;
+                    break;
+            }
+            return fields;
+        }
+        
         // Check for PUSH/POP: bits 11:9 should be x1xx (bit 9 = 1)
         if ((instruction & 0x0600) == 0x0400) {
             fields.reg_list = instruction & 0xFF;

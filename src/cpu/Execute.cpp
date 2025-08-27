@@ -96,6 +96,10 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T16_ADD_SP:
             pc_changed = execute_data_processing(fields);
             break;
+        // Extend instructions
+        case INST_T16_EXTEND:
+            pc_changed = execute_extend(fields);
+            break;
         // Multiple load/store
         case INST_T16_STMIA:
         case INST_T16_LDMIA:
@@ -169,7 +173,7 @@ bool Execute::execute_branch(const InstructionFields& fields)
         new_pc = current_pc + 4 + offset;
         
         m_registers->set_pc(new_pc);
-    LOG_DEBUG("Branch taken to " + hex32(new_pc));
+        LOG_DEBUG("Branch taken to " + hex32(new_pc));
     }
     
     Performance::getInstance().increment_branches_taken();
@@ -476,8 +480,8 @@ bool Execute::execute_load_store(const InstructionFields& fields, void* data_bus
             data &= 0xFFFF;
         }
         
-    write_memory(address, data, size, data_bus);
     LOG_DEBUG("Store: [" + hex32(address) + "] = R" + std::to_string(fields.rd) + " = " + hex32(data));
+    write_memory(address, data, size, data_bus);
     }
     
     return false;
@@ -750,4 +754,31 @@ void Execute::write_memory(uint32_t address, uint32_t data, uint32_t size, void*
     if (Log::getInstance().get_log_level() >= LOG_TRACE) {
         Log::getInstance().log_memory_access(address, data, size, true);
     }
+}
+
+bool Execute::execute_extend(const InstructionFields& fields)
+{
+    uint32_t rm_val = m_registers->read_register(fields.rm);
+    uint32_t result = 0;
+    
+    switch (fields.alu_op) {
+        case 0: // SXTH - Sign extend halfword (16-bit) to word (32-bit)
+            result = static_cast<int32_t>(static_cast<int16_t>(rm_val & 0xFFFF));
+            break;
+        case 1: // SXTB - Sign extend byte (8-bit) to word (32-bit) 
+            result = static_cast<int32_t>(static_cast<int8_t>(rm_val & 0xFF));
+            break;
+        case 2: // UXTH - Zero extend halfword (16-bit) to word (32-bit)
+            result = rm_val & 0xFFFF;
+            break;
+        case 3: // UXTB - Zero extend byte (8-bit) to word (32-bit)
+            result = rm_val & 0xFF;
+            break;
+    }
+    
+    m_registers->write_register(fields.rd, result);
+    LOG_DEBUG("Extend: R" + std::to_string(fields.rd) + " = extend(R" + std::to_string(fields.rm) + 
+              ") = " + hex32(result));
+    
+    return false;
 }

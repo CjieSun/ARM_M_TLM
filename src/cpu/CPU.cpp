@@ -99,7 +99,10 @@ void CPU::cpu_thread()
             Performance::getInstance().increment_instructions_executed();
             
             // Handle single step in debug mode: send stop and pause
+            // For branches, we want to stop at the target address, not the branch instruction itself
             if (m_debug_mode && m_single_step && m_gdb_server) {
+                // Always stop after executing one instruction, regardless of whether it was a branch
+                LOG_DEBUG("Single step completed, notifying GDB and pausing");
                 m_gdb_server->notify_step_complete();
                 m_single_step = false;
                 m_debug_paused = true; // ensure we pause on next loop
