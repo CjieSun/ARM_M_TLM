@@ -75,6 +75,7 @@ void CPU::cpu_thread()
                 // Hit a breakpoint - notify GDB and pause
                 m_gdb_server->notify_breakpoint();
                 m_debug_paused = true;
+                wait(1, SC_NS);  // Yield to SystemC kernel before continuing
                 continue; // Go back to wait for continue
             }
             
@@ -103,6 +104,7 @@ void CPU::cpu_thread()
                 m_gdb_server->notify_step_complete();
                 m_single_step = false;
                 m_debug_paused = true; // ensure we pause on next loop
+                wait(1, SC_NS);  // Yield to SystemC kernel before continuing
                 continue;
             }
             
