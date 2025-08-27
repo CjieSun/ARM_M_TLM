@@ -10,8 +10,9 @@ OBJCOPY = $(TOOLCHAIN_PREFIX)objcopy
 OBJDUMP = $(TOOLCHAIN_PREFIX)objdump
 
 # Compiler flags for Cortex-M0 (ARMv6-M)
-CFLAGS = -mcpu=cortex-m0plus -mthumb -Wall -Wextra -std=c99 -Os
-ASFLAGS = -mcpu=cortex-m0plus -mthumb
+# Include -g so ELF keeps symbols for GDB (the simulator consumes HEX separately)
+CFLAGS = -mcpu=cortex-m0plus -mthumb -Wall -Wextra -std=c99 -Os -g
+ASFLAGS = -mcpu=cortex-m0plus -mthumb -g
 LDFLAGS = -T linker_script.ld -nostdlib
 EXPLDFLAGS = -T exception_link.ld -nostdlib
 
@@ -65,6 +66,18 @@ $(EXCEPTION_TEST_ELFS): %.elf: %.o exception_link.ld
 %.hex: %.elf
 	$(OBJCOPY) -O ihex $< $@
 	$(OBJDUMP) -D -S $< > $*.lst
+
+# Launch gdb-multiarch against a built ELF. Usage: make gdb-systick_test
+# Ensure the simulator is already running with --gdb/--gdb-port before invoking this.
+GDB ?= gdb-multiarch
+GDB_PORT ?= 3333
+
+gdb-%: %.elf
+	$(GDB) $< \
+	  -ex "set architecture armv6-m" \
+	  -ex "set disassemble-next-line on" \
+	  -ex "set arm fallback-mode mthumb" \
+	  -ex "target remote :$(GDB_PORT)"
 
 # Simulator path
 SIMULATOR = ../../build/bin/arm_m_tlm

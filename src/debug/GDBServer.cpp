@@ -11,6 +11,8 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <chrono>
+#include <thread>
 
 GDBServer::GDBServer(sc_module_name name, int port) :
     sc_module(name),
@@ -268,6 +270,14 @@ void GDBServer::handle_command(const std::string& command)
         case 'G':
             response = handle_write_registers(command.substr(1));
             break;
+        case 'p':
+            // read single register: pNN where NN is hex reg number
+            response = handle_read_register(command.substr(1));
+            break;
+        case 'P':
+            // write single register: PNN=XXXXXXXX
+            response = handle_write_register(command.substr(1));
+            break;
         case 'm':
             response = handle_read_memory(command.substr(1));
             break;
@@ -275,11 +285,13 @@ void GDBServer::handle_command(const std::string& command)
             response = handle_write_memory(command);
             break;
         case 'c':
-            response = handle_continue();
-            break;
+            // Continue: per RSP, do not send an immediate reply; send stop when halted
+            (void)handle_continue();
+            return; // no immediate packet
         case 's':
-            response = handle_step();
-            break;
+            // Single step: per RSP, no immediate reply; send stop when step completes
+            (void)handle_step();
+            return; // no immediate packet
         case 'Z':
         case 'z':
             response = handle_breakpoint(command);
@@ -287,8 +299,16 @@ void GDBServer::handle_command(const std::string& command)
         case 'q':
             response = handle_query(command.substr(1));
             break;
+        case 'v':
+            // Handle v commands (vMustReplyEmpty, vCont, etc.)
+            response = handle_v_command(command);
+            break;
+        case 'H':
+            // Set thread - we only support thread 1, so just acknowledge
+            response = "OK";
+            break;
         case '?':
-            response = "S05"; // SIGTRAP
+            response = "S05"; // SIGTRAP - stopped due to signal
             break;
         case 'k':
             // Kill command
@@ -299,6 +319,8 @@ void GDBServer::handle_command(const std::string& command)
             break;
     }
     
+    // Send response (some commands like vMustReplyEmpty expect empty response),
+    // except for 'c' and 's' which return early above with no immediate reply.
     send_packet(response);
 }
 
@@ -308,7 +330,8 @@ std::string GDBServer::handle_read_registers()
         return "E01";
     }
     
-    // Get CPU registers - ARM has 16 general registers (R0-R15)
+    // ARM Cortex-M GDB expects 26 registers in specific order:
+    // R0-R15 (16 registers) + xPSR (1) + additional registers for compatibility
     std::string response;
     Registers* regs = m_cpu->get_registers();
     
@@ -323,10 +346,77 @@ std::string GDBServer::handle_read_registers()
     response += format_register_value(regs->get_lr());
     response += format_register_value(regs->get_pc());
     
-    // PSR (Program Status Register) - usually sent after general registers
+    // xPSR (Program Status Register) - register 16
     response += format_register_value(regs->get_psr());
     
+    // For gdb-multiarch compatibility, send enough registers to avoid truncation
+    // gdb-multiarch with ARM architecture can expect up to 40+ registers
+    // This includes FPU registers, system registers, and other ARM-specific registers
+    for (int i = 17; i < 40; i++) {
+        response += format_register_value(0);  // Dummy values for additional registers
+    }
+    
+    // Log the total number of registers sent
+    LOG_DEBUG("GDB sending " + std::to_string(response.length() / 8) + " registers (" + std::to_string(response.length()) + " hex chars)");
+    
     return response;
+}
+
+// Read a single register ('p' command). reg numbers mapping for ARM M-profile:
+// 0-12: r0-r12, 13: sp, 14: lr, 15: pc, 16: xpsr
+// 17: msp, 18: psp, 19: primask, 20: basepri, 21: faultmask, 22: control
+// Return "xxxxxxxx" little-endian hex, or "E01" on error.
+std::string GDBServer::handle_read_register(const std::string& regnum_hex)
+{
+    if (!m_cpu) return "E01";
+    Registers* regs = m_cpu->get_registers();
+    uint32_t regnum = parse_hex(regnum_hex);
+    uint32_t value = 0;
+    if (regnum <= 12) {
+        value = regs->read_register(static_cast<uint8_t>(regnum));
+    } else if (regnum == 13) {
+        value = regs->get_sp();
+    } else if (regnum == 14) {
+        value = regs->get_lr();
+    } else if (regnum == 15) {
+        value = regs->get_pc();
+    } else if (regnum == 16) {
+        value = regs->get_psr();
+    } else if (regnum == 17 || regnum == 18) { // MSP/PSP
+        value = regs->get_sp();
+    } else if (regnum >= 19 && regnum <= 22) { // PRIMASK, BASEPRI, FAULTMASK, CONTROL
+        value = 0;
+    } else {
+        value = 0;
+    }
+    return format_register_value(value);
+}
+
+// Write a single register ('P' command). Format: Prr=vvvvvvvv
+std::string GDBServer::handle_write_register(const std::string& packet)
+{
+    if (!m_cpu) return "E01";
+    auto eq = packet.find('=');
+    if (eq == std::string::npos) return "E02";
+    uint32_t regnum = parse_hex(packet.substr(0, eq));
+    uint32_t value = parse_hex(packet.substr(eq + 1));
+    Registers* regs = m_cpu->get_registers();
+    if (regnum <= 12) {
+        regs->write_register(static_cast<uint8_t>(regnum), value);
+    } else if (regnum == 13) {
+        regs->set_sp(value);
+    } else if (regnum == 14) {
+        regs->set_lr(value);
+    } else if (regnum == 15) {
+        regs->set_pc(value);
+    } else if (regnum == 16) {
+        regs->set_psr(value);
+    } else if (regnum == 17 || regnum == 18) {
+        regs->set_sp(value);
+    } else {
+        // ignore others
+    }
+    return "OK";
 }
 
 std::string GDBServer::handle_write_registers(const std::string& data)
@@ -335,7 +425,7 @@ std::string GDBServer::handle_write_registers(const std::string& data)
         return "E01";
     }
     
-    if (data.length() < 16 * 8) { // 16 registers * 8 hex chars per register
+    if (data.length() < 17 * 8) { // At least 17 registers * 8 hex chars per register
         return "E02";
     }
     
@@ -353,10 +443,12 @@ std::string GDBServer::handle_write_registers(const std::string& data)
     regs->set_lr(parse_hex(data.substr(14 * 8, 8)));
     regs->set_pc(parse_hex(data.substr(15 * 8, 8)));
     
-    // PSR
+    // PSR (xPSR)
     if (data.length() >= 17 * 8) {
         regs->set_psr(parse_hex(data.substr(16 * 8, 8)));
     }
+    
+    // Ignore additional registers (17-31) - they're just for compatibility
     
     return "OK";
 }
@@ -381,6 +473,9 @@ std::string GDBServer::handle_read_memory(const std::string& addr_len)
     for (uint32_t i = 0; i < length; i++) {
         try {
             uint32_t data = m_cpu->read_memory_debug(address + i);
+            if (i == 0 && length <= 64) { // Log first few bytes of small reads
+                LOG_DEBUG("GDB read memory @0x" + to_hex(address + i, 8) + " -> 0x" + to_hex(static_cast<uint8_t>(data), 2));
+            }
             response += to_hex(static_cast<uint8_t>(data));
         } catch (...) {
             return "E03";
@@ -428,11 +523,18 @@ std::string GDBServer::handle_continue()
         m_continue_requested = true;
         m_single_step = false;
         m_debug_mode = true; // Ensure we stay in debug mode
+        
+        // Also clear CPU single step and paused state
+        if (m_cpu) {
+            m_cpu->set_single_step(false);
+            m_cpu->set_debug_paused(false);
+        }
+        
         m_continue_cv.notify_all();
     }
     
-    // Don't send response immediately - will send stop reason when execution stops
-    return "";
+    // Return OK immediately, will send stop reason when execution actually stops
+    return "OK";
 }
 
 std::string GDBServer::handle_step()
@@ -441,12 +543,19 @@ std::string GDBServer::handle_step()
         std::lock_guard<std::mutex> lock(m_debug_mutex);
         m_single_step = true;
         m_continue_requested = true;
-        m_debug_mode = true; // Ensure we stay in debug mode  
+        m_debug_mode = true; // Ensure we stay in debug mode
+        
+        // Set CPU single step mode and clear paused state
+        if (m_cpu) {
+            m_cpu->set_single_step(true);
+            m_cpu->set_debug_paused(false);
+        }
+        
         m_continue_cv.notify_all();
     }
     
-    // Don't send response immediately - will send stop reason when step completes
-    return "";
+    // Return OK immediately, will send stop reason when step completes
+    return "OK";
 }
 
 std::string GDBServer::handle_breakpoint(const std::string& packet)
@@ -480,11 +589,52 @@ std::string GDBServer::handle_breakpoint(const std::string& packet)
 std::string GDBServer::handle_query(const std::string& query)
 {
     if (query.substr(0, 9) == "Supported") {
-        return "PacketSize=4000";
+        // Tell GDB what we support - more conservative for gdb-multiarch
+        return "PacketSize=4000;swbreak+;hwbreak-;qRelocInsn-;fork-events-;vfork-events-;exec-events-;vContSupported-";
     } else if (query == "C") {
+        // Current thread - return thread ID 1 (we only have one thread)
         return "QC1";
+    } else if (query == "fThreadInfo") {
+        // First thread info - return our single thread
+        return "m1";
+    } else if (query == "sThreadInfo") {
+        // Subsequent thread info - no more threads
+        return "l";
+    } else if (query.substr(0, 11) == "ThreadExtraInfo") {
+        // Thread extra info - just return a simple name
+        return "main";
+    } else if (query == "Attached") {
+        // Are we attached to an existing process? Yes (1)
+        return "1";
+    } else if (query.substr(0, 7) == "Offsets") {
+        // Section offsets - none
+        return "Text=0;Data=0;Bss=0";
+    } else if (query.substr(0, 8) == "Register") {
+        // Register info query - not supported
+        return "";
+    } else if (query == "TStatus") {
+        // Tracepoint status - not supported
+        return "";
     }
     
+    return "";
+}
+
+std::string GDBServer::handle_v_command(const std::string& command)
+{
+    if (command == "vMustReplyEmpty") {
+        // This is used by GDB to test if the target supports empty replies
+        return "";
+    } else if (command.substr(0, 5) == "vCont") {
+        // vCont commands for continue/step - we don't support the extended syntax
+        // Just return empty to indicate we don't support it
+        return "";
+    } else if (command.substr(0, 9) == "vFlashErase" || command.substr(0, 9) == "vFlashWrite") {
+        // Flash programming commands - not supported
+        return "";
+    }
+    
+    // For other v commands, return empty (unsupported)
     return "";
 }
 
@@ -517,6 +667,43 @@ void GDBServer::wait_for_continue()
     });
     
     m_continue_requested = false; // Reset after waking up
+}
+
+bool GDBServer::has_breakpoint(uint32_t address) const
+{
+    return m_breakpoints.find(address) != m_breakpoints.end();
+}
+
+bool GDBServer::wait_for_connection(int timeout_ms)
+{
+    if (!m_server_running) {
+        LOG_ERROR("GDB Server not running - cannot wait for connection");
+        return false;
+    }
+    
+    LOG_INFO("Waiting for GDB connection on port " + std::to_string(m_port) + "...");
+    
+    auto start_time = std::chrono::steady_clock::now();
+    auto timeout = std::chrono::milliseconds(timeout_ms);
+    
+    while (!m_client_connected && m_server_running) {
+        auto current_time = std::chrono::steady_clock::now();
+        if (timeout_ms > 0 && (current_time - start_time) > timeout) {
+            LOG_WARNING("Timeout waiting for GDB connection after " + std::to_string(timeout_ms) + "ms");
+            return false;
+        }
+        
+        // Sleep for a short time to avoid busy waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    
+    if (m_client_connected) {
+        LOG_INFO("GDB client connected successfully");
+        return true;
+    } else {
+        LOG_INFO("GDB server stopped while waiting for connection");
+        return false;
+    }
 }
 
 // Utility methods

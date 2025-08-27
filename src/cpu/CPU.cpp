@@ -21,6 +21,7 @@ CPU::CPU(sc_module_name name) :
     m_pending_external_exception(0),
     m_debug_mode(false),
     m_single_step(false),
+    m_debug_paused(false),
     m_gdb_server(nullptr)
 {
     // Initialize sub-modules
@@ -49,10 +50,13 @@ void CPU::cpu_thread()
     
     while (true) {
         try {
-            // Debug mode handling - wait at the beginning of each instruction
+            // Debug mode handling - wait only when we need to pause
             if (m_debug_mode && m_gdb_server) {
-                // Wait for continue signal from GDB
-                m_gdb_server->wait_for_continue();
+                // Only wait when explicitly paused (not during single-step)
+                if (m_debug_paused) {
+                    m_gdb_server->wait_for_continue();
+                    m_debug_paused = false; // Clear pause flag after continuing
+                }
                 
                 // Check if we should exit due to server stopping
                 if (!m_gdb_server->is_running()) {
@@ -67,8 +71,11 @@ void CPU::cpu_thread()
             m_pc = m_registers->get_pc();
             
             // Check for breakpoints in debug mode
-            if (m_debug_mode && m_gdb_server) {
-                // This will be handled by the GDB server's breakpoint checking
+            if (m_debug_mode && m_gdb_server && check_breakpoint(m_pc)) {
+                // Hit a breakpoint - notify GDB and pause
+                m_gdb_server->notify_breakpoint();
+                m_debug_paused = true;
+                continue; // Go back to wait for continue
             }
             
             // Fetch instruction (always fetch 32-bit to check for 32-bit instructions)
@@ -91,11 +98,11 @@ void CPU::cpu_thread()
             // Update performance counters
             Performance::getInstance().increment_instructions_executed();
             
-            // Handle single step in debug mode
+            // Handle single step in debug mode: send stop and pause
             if (m_debug_mode && m_single_step && m_gdb_server) {
                 m_gdb_server->notify_step_complete();
                 m_single_step = false;
-                // Continue waiting for next GDB command
+                m_debug_paused = true; // ensure we pause on next loop
                 continue;
             }
             
@@ -499,7 +506,9 @@ void CPU::write_memory_debug(uint32_t address, uint8_t data)
 
 bool CPU::check_breakpoint(uint32_t address) const
 {
-    // This will be called by GDB server to check if there's a breakpoint
-    // The actual breakpoint checking will be done by the GDB server
+    // Check if there's a breakpoint at this address via GDB server
+    if (m_gdb_server) {
+        return m_gdb_server->has_breakpoint(address);
+    }
     return false;
 }

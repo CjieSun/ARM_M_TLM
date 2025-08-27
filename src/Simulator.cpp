@@ -91,10 +91,19 @@ void Simulator::run_simulation(sc_time duration)
         Performance::getInstance().start_timing();
     }
     
-    // Start GDB server if enabled
+    // Start GDB server if enabled and wait for connection
     if (m_gdb_enabled && m_gdb_server) {
         m_gdb_server->start_server();
+        
+        // Wait for GDB client to connect
+        if (!m_gdb_server->wait_for_connection(30000)) { // 30 second timeout
+            LOG_ERROR("GDB client did not connect within timeout");
+            return;
+        }
+        
         m_cpu->set_debug_mode(true);
+        m_cpu->set_debug_paused(true);  // Start in paused state
+        LOG_INFO("GDB connected - starting simulation in debug mode");
     }
     
     if (duration == SC_ZERO_TIME) {

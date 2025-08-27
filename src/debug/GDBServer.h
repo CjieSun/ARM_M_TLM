@@ -36,11 +36,13 @@ public:
     void start_server();
     void stop_server();
     bool is_running() const { return m_server_running; }
+    bool wait_for_connection(int timeout_ms = 30000);  // Wait for GDB to connect
     
     // Debug control interface
     void notify_breakpoint();
     void notify_step_complete();
     void wait_for_continue();
+    bool has_breakpoint(uint32_t address) const;
     
 private:
     // Network communication
@@ -80,6 +82,10 @@ private:
     std::string handle_step();
     std::string handle_breakpoint(const std::string& packet);
     std::string handle_query(const std::string& query);
+    std::string handle_v_command(const std::string& command);
+    // Single register access
+    std::string handle_read_register(const std::string& regnum_hex);
+    std::string handle_write_register(const std::string& packet);
     
     // Utility methods
     std::string format_register_value(uint32_t value);

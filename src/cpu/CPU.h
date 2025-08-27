@@ -62,6 +62,7 @@ public:
     bool is_debug_mode() const { return m_debug_mode; }
     void set_single_step(bool step) { m_single_step = step; }
     bool is_single_step() const { return m_single_step; }
+    void set_debug_paused(bool paused) { m_debug_paused = paused; }
     bool check_breakpoint(uint32_t address) const;
     void set_gdb_server(class GDBServer* gdb) { m_gdb_server = gdb; }
 
@@ -84,6 +85,7 @@ private:
     // Debug state
     bool m_debug_mode;
     bool m_single_step;
+    bool m_debug_paused;
     class GDBServer* m_gdb_server;
     
     // Helper methods
