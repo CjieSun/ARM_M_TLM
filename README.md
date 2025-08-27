@@ -4,6 +4,22 @@ An ARM Cortex-M0 SystemC-TLM2 Virtual Platform Simulator
 
 This project implements a cycle-accurate, transaction-level modeling (TLM-2) based virtual platform for the ARM Cortex-M0 processor. Built using SystemC, it provides a comprehensive simulation environment supporting the complete ARMv6-M Thumb/Thumb2 instruction set architecture with integrated peripherals and debugging capabilities.
 
+## 📖 Table of Contents
+
+- [🚀 Key Features](#-key-features)
+- [📋 Project Architecture](#-project-architecture)
+  - [System Overview](#system-overview)
+  - [TLM Socket Communication Architecture](#tlm-socket-communication-architecture)  
+  - [Address Space and Memory Mapping](#address-space-and-memory-mapping)
+  - [Core Design Principles](#core-design-principles)
+- [🏗️ Building the Simulator](#-building-the-simulator)
+- [💻 Usage](#-usage)
+- [🧪 Testing](#-testing)
+- [🔧 SystemC Module Details](#-systemc-module-details)
+- [🔌 Adding New Peripherals](#-adding-new-peripherals)
+- [📊 Module Summary](#-module-summary)
+- [🏗️ SystemC Module Hierarchy](#-systemc-module-hierarchy)
+
 ## 🚀 Key Features
 
 - **Complete ARMv6-M ISA Support**: Full Thumb/Thumb2 instruction set implementation
@@ -13,8 +29,6 @@ This project implements a cycle-accurate, transaction-level modeling (TLM-2) bas
 - **Performance Monitoring**: Built-in performance counters and detailed logging
 - **Intel HEX Support**: Direct firmware loading from compiled binaries
 - **Extensible Design**: Modular architecture for easy peripheral addition
-
-## 📋 Project Architecture
 
 ## 📋 Project Architecture
 
@@ -158,7 +172,7 @@ Memory Map:
 └─────────────────┴─────────────────┴──────────────────────────────────────┘
 ```
 
-## Building the Simulator
+## 🏗️ Building the Simulator
 - CMake (version 3.10 or higher)
 - G++ compiler with C++17 support
 - SystemC library (version 2.3.x)
@@ -197,7 +211,7 @@ Memory Map:
    ./bin/arm_m_tlm --help
    ```
 
-## Usage
+## 💻 Usage
 
 ### Command Line Options
 - `--hex <file>`: Load Intel HEX file into memory
@@ -239,7 +253,7 @@ See [docs/GDB_DEBUGGING.md](docs/GDB_DEBUGGING.md) for detailed usage instructio
 ./bin/arm_m_tlm --debug
 ```
 
-## Testing
+## 🧪 Testing
 
 ### Quick Test Execution
 Run all tests and generate comprehensive reports:
