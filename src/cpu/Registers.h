@@ -69,11 +69,12 @@ public:
         }
     }
     
-    // PSR flag access
+    // PSR flag access (APSR - Application Program Status Register)
     bool get_n_flag() const { return (m_psr >> 31) & 1; }
     bool get_z_flag() const { return (m_psr >> 30) & 1; }
     bool get_c_flag() const { return (m_psr >> 29) & 1; }
     bool get_v_flag() const { return (m_psr >> 28) & 1; }
+    bool get_q_flag() const { return (m_psr >> 27) & 1; }  // Saturation flag
     
     void set_n_flag(bool flag) { 
         m_psr = (m_psr & ~(1U << 31)) | (flag ? (1U << 31) : 0); 
@@ -87,6 +88,36 @@ public:
     void set_v_flag(bool flag) { 
         m_psr = (m_psr & ~(1U << 28)) | (flag ? (1U << 28) : 0); 
     }
+    void set_q_flag(bool flag) { 
+        m_psr = (m_psr & ~(1U << 27)) | (flag ? (1U << 27) : 0); 
+    }
+    
+    // IPSR access (Interrupt Program Status Register) - bits 8-0
+    uint32_t get_ipsr() const { return m_psr & 0x1FF; }
+    void set_ipsr(uint32_t exception_num) { 
+        m_psr = (m_psr & ~0x1FF) | (exception_num & 0x1FF);
+    }
+    
+    // EPSR access (Execution Program Status Register) - bit 24 (Thumb)
+    bool get_thumb_bit() const { return (m_psr >> 24) & 1; }
+    void set_thumb_bit(bool thumb) { 
+        m_psr = (m_psr & ~(1U << 24)) | (thumb ? (1U << 24) : 0); 
+    }
+    
+    // Combined xPSR access methods
+    uint32_t get_apsr() const { return m_psr & 0xF8000000; }  // N, Z, C, V, Q flags
+    uint32_t get_epsr() const { return m_psr & 0x01000000; }  // Thumb bit
+    void set_apsr(uint32_t apsr) { 
+        m_psr = (m_psr & ~0xF8000000) | (apsr & 0xF8000000);
+    }
+    void set_epsr(uint32_t epsr) { 
+        m_psr = (m_psr & ~0x01000000) | (epsr & 0x01000000);
+    }
+    
+    // Exception handling helpers
+    bool is_in_exception() const { return get_ipsr() != 0; }
+    void enter_exception(uint32_t exception_num) { set_ipsr(exception_num); }
+    void exit_exception() { set_ipsr(0); }
     
     // Reset
     void reset();
