@@ -100,6 +100,10 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T16_EXTEND:
             pc_changed = execute_extend(fields);
             break;
+        // CPS instructions
+        case INST_T16_CPS:
+            pc_changed = execute_cps(fields);
+            break;
         // Multiple load/store
         case INST_T16_STMIA:
         case INST_T16_LDMIA:
@@ -116,6 +120,19 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
             break;
         case INST_T16_SVC:
             pc_changed = execute_exception(fields);
+            break;
+        // T32 Memory barriers
+        case INST_T32_DSB:
+        case INST_T32_DMB:
+        case INST_T32_ISB:
+            pc_changed = execute_memory_barrier(fields);
+            break;
+        // T32 System register access
+        case INST_T32_MSR:
+            pc_changed = execute_msr(fields);
+            break;
+        case INST_T32_MRS:
+            pc_changed = execute_mrs(fields);
             break;
         default:
             LOG_WARNING("Unknown instruction type");
@@ -147,13 +164,14 @@ bool Execute::execute_branch(const InstructionFields& fields)
             m_registers->write_register(14, current_pc + 2 + 1); // +1 for Thumb bit
         }
         
-        // BX/BLX can switch between ARM and Thumb modes
-        // Bit 0 indicates Thumb mode (which we always use)
-        // If BX to EXC_RETURN, perform exception return instead of normal branch
-        if (fields.rm == 14 && m_cpu && m_cpu->try_exception_return(new_pc)) {
-            LOG_DEBUG("Exception return via BX LR");
+        // BX to EXC_RETURN magic value should perform an exception return
+        if (m_cpu && m_cpu->try_exception_return(new_pc)) {
+            LOG_DEBUG("Exception return via BX R" + std::to_string(fields.rm));
             return true; // PC updated by exception return
         }
+
+        // BX/BLX can switch between ARM and Thumb modes
+        // Bit 0 indicates Thumb mode (which we always use)
         m_registers->set_pc(new_pc & ~1);
         
     LOG_DEBUG("BX/BLX to " + hex32(new_pc));
@@ -505,12 +523,25 @@ bool Execute::execute_load_store_multiple(const InstructionFields& fields, void*
                     if (i < 8) {
                         m_registers->write_register(i, data);
                     } else if (i == 15 && (fields.reg_list & 0x8000)) {
-                        // POP PC - this causes a branch
-                        m_registers->set_pc(data & ~1); // Clear Thumb bit
+                        // POP PC - this can be a normal return or an EXC_RETURN sequence
                         LOG_DEBUG("POP PC: " + hex32(data));
-                        address += 4;
-                        m_registers->write_register(13, address); // Update SP
-                        return true; // PC changed
+
+                        // Detect EXC_RETURN magic values
+                        if (m_cpu && (data == 0xFFFFFFF1u || data == 0xFFFFFFF9u || data == 0xFFFFFFFDu)) {
+                            // Advance SP past the stacked PC first
+                            address += 4;
+                            m_registers->write_register(13, address); // Update SP
+                            if (m_cpu->try_exception_return(data)) {
+                                return true; // PC changed by exception return
+                            }
+                            // If exception return failed, fall through to normal branch
+                        } else {
+                            // Normal POP to PC
+                            m_registers->set_pc(data & ~1u); // Clear Thumb bit
+                            address += 4;
+                            m_registers->write_register(13, address); // Update SP
+                            return true; // PC changed
+                        }
                     } else if (i == 14 && (fields.reg_list & 0x4000)) {
                         m_registers->write_register(14, data); // LR
                     }
@@ -779,6 +810,183 @@ bool Execute::execute_extend(const InstructionFields& fields)
     m_registers->write_register(fields.rd, result);
     LOG_DEBUG("Extend: R" + std::to_string(fields.rd) + " = extend(R" + std::to_string(fields.rm) + 
               ") = " + hex32(result));
+    
+    return false;
+}
+
+bool Execute::execute_memory_barrier(const InstructionFields& fields)
+{
+    // Memory barriers are typically no-ops in a single-core simulation
+    // but we implement them for completeness and debugging
+    
+    std::string barrier_type;
+    switch (fields.type) {
+        case INST_T32_DSB:
+            barrier_type = "DSB";
+            break;
+        case INST_T32_DMB:
+            barrier_type = "DMB";
+            break;
+        case INST_T32_ISB:
+            barrier_type = "ISB";
+            break;
+        default:
+            barrier_type = "Unknown";
+            break;
+    }
+    
+    std::string option_str;
+    switch (fields.imm) {
+        case 15: option_str = "SY"; break;  // System
+        case 14: option_str = "ST"; break;  // Store
+        case 11: option_str = "ISH"; break; // Inner Shareable
+        case 10: option_str = "ISHST"; break; // Inner Shareable Store
+        case 7:  option_str = "NSH"; break; // Non-shareable
+        case 6:  option_str = "NSHST"; break; // Non-shareable Store
+        case 3:  option_str = "OSH"; break; // Outer Shareable
+        case 2:  option_str = "OSHST"; break; // Outer Shareable Store
+        default: option_str = "#" + std::to_string(fields.imm); break;
+    }
+    
+    LOG_DEBUG(barrier_type + " " + option_str + " - Memory barrier executed");
+    
+    // In a real implementation, this would ensure memory ordering
+    // For simulation purposes, we just acknowledge the instruction
+    return false;
+}
+
+bool Execute::execute_cps(const InstructionFields& fields)
+{
+    // CPS (Change Processor State) instruction
+    // For ARMv6-M, this only affects the PRIMASK register (interrupt masking)
+    
+    std::string operation = (fields.alu_op == 1) ? "CPSID" : "CPSIE";
+    
+    if (fields.imm & 0x1) { // I bit - affects PRIMASK
+        if (fields.alu_op == 1) {
+            // CPSID I - disable interrupts (set PRIMASK = 1)
+            m_registers->disable_interrupts();
+            LOG_DEBUG("CPSID I - Interrupts disabled (PRIMASK = 1)");
+        } else {
+            // CPSIE I - enable interrupts (set PRIMASK = 0) 
+            m_registers->enable_interrupts();
+            LOG_DEBUG("CPSIE I - Interrupts enabled (PRIMASK = 0)");
+        }
+        
+        // Log the current PRIMASK value for confirmation
+        uint32_t primask = m_registers->get_primask();
+        LOG_DEBUG(operation + " I completed - PRIMASK = " + std::to_string(primask));
+    }
+    
+    // F bit (fields.imm & 0x2) would affect FAULTMASK, but ARMv6-M doesn't support this
+    // A bit (fields.imm & 0x4) would affect CONTROL register, but not typically used with CPS
+    
+    return false;
+}
+
+bool Execute::execute_msr(const InstructionFields& fields)
+{
+    // MSR (Move to Special Register) instruction
+    uint32_t source_value = m_registers->read_register(fields.rn);
+    uint32_t spec_reg = fields.imm;
+    
+    std::string reg_name;
+    switch (spec_reg) {
+        case 0x09: // PSP (Process Stack Pointer)
+            reg_name = "PSP";
+            m_registers->set_psp(source_value);
+            LOG_DEBUG("MSR PSP, R" + std::to_string(fields.rn) + " = " + hex32(source_value));
+            break;
+            
+        case 0x14: // CONTROL 
+            reg_name = "CONTROL";
+            m_registers->set_control(source_value);
+            // Bit 0: Thread mode privilege level (0=privileged, 1=unprivileged)  
+            // Bit 1: Thread mode stack selection (0=MSP, 1=PSP)
+            LOG_DEBUG("MSR CONTROL, R" + std::to_string(fields.rn) + " = " + hex32(source_value) + 
+                     " (SPSEL=" + std::to_string((source_value >> 1) & 1) + 
+                     ", nPRIV=" + std::to_string(source_value & 1) + ")");
+            break;
+            
+        case 0x00: // APSR (Application Program Status Register)
+            {
+                reg_name = "APSR";
+                // Only allow updating of condition flags (bits 31-28)
+                uint32_t current_psr = m_registers->get_psr();
+                uint32_t new_psr = (current_psr & ~0xF0000000) | (source_value & 0xF0000000);
+                m_registers->set_psr(new_psr);
+                LOG_DEBUG("MSR APSR, R" + std::to_string(fields.rn) + " = " + hex32(source_value) +
+                         " (flags only)");
+                break;
+            }
+            
+        case 0x10: // PRIMASK
+            {
+                reg_name = "PRIMASK";
+                m_registers->set_primask(source_value);
+                bool interrupts_enabled = m_registers->interrupts_enabled();
+                LOG_DEBUG("MSR PRIMASK, R" + std::to_string(fields.rn) + " = " + hex32(source_value) +
+                         " (interrupts " + (interrupts_enabled ? "enabled" : "disabled") + ")");
+                break;
+            }
+        case 0x08: // MSP
+            {
+                reg_name = "MSP";
+                m_registers->set_msp(source_value);
+                LOG_DEBUG("MSR MSP, R" + std::to_string(fields.rn) + " = " + hex32(source_value));
+                break;
+            }
+        default:
+            reg_name = "UNKNOWN(" + std::to_string(spec_reg) + ")";
+            LOG_WARNING("MSR to unknown special register: " + std::to_string(spec_reg));
+            break;
+    }
+    
+    return false;
+}
+
+bool Execute::execute_mrs(const InstructionFields& fields)
+{
+    // MRS (Move from Special Register) instruction
+    uint32_t spec_reg = fields.imm;
+    uint32_t value = 0;
+    std::string reg_name;
+    
+    switch (spec_reg) {
+        case 0x09: // PSP (Process Stack Pointer)
+            reg_name = "PSP";
+            value = m_registers->get_psp();
+            break;
+            
+        case 0x14: // CONTROL
+            reg_name = "CONTROL";
+            value = m_registers->get_control();
+            break;
+            
+        case 0x00: // APSR (Application Program Status Register)
+            reg_name = "APSR";
+            value = m_registers->get_psr() & 0xF0000000; // Only condition flags
+            break;
+            
+        case 0x10: // PRIMASK
+            reg_name = "PRIMASK";
+            value = m_registers->get_primask();
+            break;
+            
+        case 0x08: // MSP (Main Stack Pointer)
+            reg_name = "MSP";
+            value = m_registers->get_msp();
+            break;
+            
+        default:
+            reg_name = "UNKNOWN(" + std::to_string(spec_reg) + ")";
+            LOG_WARNING("MRS from unknown special register: " + std::to_string(spec_reg));
+            value = 0;
+            break;
+    }
+    
+    m_registers->write_register(fields.rd, value);
+    LOG_DEBUG("MRS R" + std::to_string(fields.rd) + ", " + reg_name + " = " + hex32(value));
     
     return false;
 }

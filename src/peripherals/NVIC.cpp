@@ -18,6 +18,7 @@ NVIC::NVIC(sc_module_name name) :
     m_shcsr(0),
     m_shpr2(0),
     m_shpr3(0),
+    m_icsr(0),
     m_pending_exceptions(0),
     m_active_exceptions(0)
 {
@@ -69,6 +70,7 @@ void NVIC::handle_read(tlm_generic_payload& trans)
     if (address >= NVIC_ICER && address < NVIC_ICER + 0x40) address = NVIC_ICER;
     if (address >= NVIC_ISPR && address < NVIC_ISPR + 0x40) address = NVIC_ISPR;
     if (address >= NVIC_ICPR && address < NVIC_ICPR + 0x40) address = NVIC_ICPR;
+    if (address == NVIC_ICSR) address = NVIC_ICSR;
 
     switch (address) {
         case NVIC_STK_CTRL:
@@ -107,6 +109,10 @@ void NVIC::handle_read(tlm_generic_payload& trans)
             break;
         case NVIC_SHPR3:
             value = m_shpr3;
+            break;
+        case NVIC_ICSR:
+            // Report PENDSVSET (bit 28) and PENDSVCLR (write-only) as 0
+            value = m_icsr;
             break;
         default:
             // Check if it's an IPR register
@@ -152,6 +158,7 @@ void NVIC::handle_write(tlm_generic_payload& trans)
     if (address >= NVIC_ICER && address < NVIC_ICER + 0x40) address = NVIC_ICER;
     if (address >= NVIC_ISPR && address < NVIC_ISPR + 0x40) address = NVIC_ISPR;
     if (address >= NVIC_ICPR && address < NVIC_ICPR + 0x40) address = NVIC_ICPR;
+    if (address == NVIC_ICSR) address = NVIC_ICSR;
     
     switch (address) {
         case NVIC_STK_CTRL: {
@@ -201,6 +208,22 @@ void NVIC::handle_write(tlm_generic_payload& trans)
         case NVIC_SHPR3:
             m_shpr3 = value;
             break;
+        case NVIC_ICSR: {
+            LOG_INFO("NVIC_ICSR" + std::to_string(value));
+            // Handle PENDSVSET (bit 28) and PENDSVCLR (bit 27)
+            if (value & (1u << 28)) {
+                // Pend PendSV
+                m_icsr |= (1u << 28);
+                trigger_pendsv();
+            }
+            if (value & (1u << 27)) {
+                // Clear PendSV
+                m_icsr &= ~(1u << 28);
+                // Clear CPU pending flag via message as well
+                // We do not have a direct clear; CPU clears after handling.
+            }
+            break;
+        }
         default:
             // Check if it's an IPR register
             if (address >= NVIC_IPR0 && address <= NVIC_IPR7) {

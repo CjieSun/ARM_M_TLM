@@ -92,6 +92,9 @@ enum InstructionType {
     
     // --- T16: Extend instructions --- (Format 12 subset)
     INST_T16_EXTEND,            // SXTH, SXTB, UXTH, UXTB
+    
+    // --- T16: Change Processor State --- (Format 12 subset)
+    INST_T16_CPS,               // CPSIE/CPSID
 
     // --- T16: Multiple load/store --- (Format 15)
     INST_T16_STMIA,             // STMIA Rn!, reglist
@@ -106,6 +109,15 @@ enum InstructionType {
 
     // --- T32: (ARMv6-M supports only BL) ---
     INST_T32_BL,                // BL label
+    
+    // --- T32: Memory barriers (ARMv6-M+) ---
+    INST_T32_DSB,               // DSB #option
+    INST_T32_DMB,               // DMB #option  
+    INST_T32_ISB,               // ISB #option
+    
+    // --- T32: System register access ---
+    INST_T32_MSR,               // MSR spec_reg, Rn
+    INST_T32_MRS,               // MRS Rd, spec_reg
 
     // Backward-compat aliases (temporary, for incremental refactors)
     INST_BRANCH_COND = INST_T16_B_COND,

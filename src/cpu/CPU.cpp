@@ -331,33 +331,72 @@ void CPU::request_svc()
 
 bool CPU::try_exception_return(uint32_t exc_return)
 {
-    // Handle a minimal EXC_RETURN for Thread mode, return to using MSP: 0xFFFFFFF9
-    if (exc_return == 0xFFFFFFF9) {
-        // Pop the standard exception stack frame (R0-R3, R12, LR, PC, PSR) in reverse
-        uint32_t sp = m_registers->get_sp();
-        uint32_t r0  = read_memory_word(sp);      sp += 4;
-        uint32_t r1  = read_memory_word(sp);      sp += 4;
-        uint32_t r2  = read_memory_word(sp);      sp += 4;
-        uint32_t r3  = read_memory_word(sp);      sp += 4;
-        uint32_t r12 = read_memory_word(sp);      sp += 4;
-        uint32_t lr  = read_memory_word(sp);      sp += 4;
-        uint32_t pc  = read_memory_word(sp);      sp += 4;
-        uint32_t psr = read_memory_word(sp);      sp += 4;
-
-        m_registers->write_register(0, r0);
-        m_registers->write_register(1, r1);
-        m_registers->write_register(2, r2);
-        m_registers->write_register(3, r3);
-        m_registers->write_register(12, r12);
-        m_registers->set_lr(lr);
-        // Ensure Thumb bit is clear in stored PC per our execution model
-        m_registers->set_pc(pc & ~1u);
-        m_registers->set_psr(psr);
-        m_registers->set_sp(sp);
-        LOG_INFO("Exception return performed to PC: 0x" + [] (uint32_t v){ std::stringstream ss; ss<<std::hex<<v; return ss.str(); }(pc));
-        return true;
+    // Validate EXC_RETURN per ARM: bits[31:28]==0xF, bits[27:4]==1 (SBOP)
+    if ((exc_return & 0xF0000000u) != 0xF0000000u) {
+        LOG_DEBUG("EXC_RETURN reject: top nibble != 0xF, value=" + [] (uint32_t v){ std::stringstream ss; ss<<std::hex<<v; return ss.str(); }(exc_return));
+        return false;
     }
-    return false;
+    if ((exc_return & 0x0FFFFFF0u) != 0x0FFFFFF0u) {
+        // Some firmware may not set reserved ones; log and continue to be permissive
+        LOG_DEBUG("EXC_RETURN SBOP not all ones, continuing anyway: value=" + [] (uint32_t v){ std::stringstream ss; ss<<std::hex<<v; return ss.str(); }(exc_return));
+    }
+
+    uint32_t low = exc_return & 0xFu;
+    bool to_thread;
+    bool use_psp;
+    switch (low) {
+        case 0x1: // Return to Handler, use MSP
+            to_thread = false; use_psp = false; break;
+        case 0x9: // Return to Thread, use MSP
+            to_thread = true;  use_psp = false; break;
+        case 0xD: // Return to Thread, use PSP
+            to_thread = true;  use_psp = true;  break;
+        default:
+            LOG_DEBUG("EXC_RETURN reject: low nibble unsupported: 0x" + [] (uint32_t v){ std::stringstream ss; ss<<std::hex<<v; return ss.str(); }(low));
+            return false; // Unused/Reserved
+    }
+
+    // Select stack pointer for unstacking
+    uint32_t sp = use_psp ? m_registers->get_psp() : m_registers->get_msp();
+
+    // Pop the standard exception stack frame (R0-R3, R12, LR, PC, PSR)
+    uint32_t r0  = read_memory_word(sp);      sp += 4;
+    uint32_t r1  = read_memory_word(sp);      sp += 4;
+    uint32_t r2  = read_memory_word(sp);      sp += 4;
+    uint32_t r3  = read_memory_word(sp);      sp += 4;
+    uint32_t r12 = read_memory_word(sp);      sp += 4;
+    uint32_t lr  = read_memory_word(sp);      sp += 4;
+    uint32_t pc  = read_memory_word(sp);      sp += 4;
+    uint32_t psr = read_memory_word(sp);      sp += 4;
+
+    // Write back the updated SP to the selected stack
+    if (use_psp) {
+        m_registers->set_psp(sp);
+    } else {
+        m_registers->set_msp(sp);
+    }
+
+    // Restore core registers
+    m_registers->write_register(0, r0);
+    m_registers->write_register(1, r1);
+    m_registers->write_register(2, r2);
+    m_registers->write_register(3, r3);
+    m_registers->write_register(12, r12);
+    m_registers->set_lr(lr);
+    m_registers->set_psr(psr);
+
+    // If returning to Thread mode, switch SP selection (CONTROL.SPSEL)
+    if (to_thread) {
+        uint32_t control = m_registers->get_control();
+        if (use_psp) control |=  (1u << 1); // SPSEL=1 -> PSP
+        else         control &= ~(1u << 1); // SPSEL=0 -> MSP
+        m_registers->set_control(control);
+    }
+
+    // Branch to restored PC (ensure Thumb bit handling) for both Thread and Handler returns
+    m_registers->set_pc(pc & ~1u);
+    LOG_INFO("Exception return performed to PC: 0x" + [] (uint32_t v){ std::stringstream ss; ss<<std::hex<<v; return ss.str(); }(pc));
+    return true;
 }
 
 void CPU::handle_exception(ExceptionType exception_type)
@@ -367,6 +406,13 @@ void CPU::handle_exception(ExceptionType exception_type)
     // Save current context by pushing stack frame
     uint32_t return_address = m_registers->get_pc();
     push_exception_stack_frame(return_address);
+    
+    // Enter Handler mode: set IPSR to exception number and force MSP as active SP
+    m_registers->set_ipsr(static_cast<uint32_t>(exception_type));
+    // In Handler mode, hardware uses MSP regardless of CONTROL.SPSEL; we approximate by clearing SPSEL
+    uint32_t control = m_registers->get_control();
+    control &= ~(1u << 1); // SPSEL=0 -> MSP
+    m_registers->set_control(control);
     
     // Get exception vector address
     uint32_t vector_address = get_exception_vector_address(exception_type);
@@ -419,11 +465,17 @@ uint32_t CPU::get_exception_vector_address(ExceptionType exception_type)
 
 void CPU::push_exception_stack_frame(uint32_t return_address)
 {
-    // ARM Cortex-M0 exception stack frame (8 words pushed automatically)
-    uint32_t sp = m_registers->get_sp();
-    
-    // Push registers to stack (PSR, PC, LR, R12, R3, R2, R1, R0)
-    sp -= 4; write_memory_word(sp, m_registers->get_psr());         // PSR
+    // ARM Cortex-M exception entry behavior:
+    // - If coming from Thread mode, hardware stacks to the current thread SP (MSP if SPSEL=0, PSP if SPSEL=1)
+    // - If coming from Handler mode, stacks to MSP
+    bool in_handler = (m_registers->get_ipsr() != 0);
+    bool thread_used_psp = (!in_handler) && ((m_registers->get_control() & (1u<<1)) != 0);
+
+    // Select stack for stacking
+    uint32_t sp = thread_used_psp ? m_registers->get_psp() : m_registers->get_msp();
+
+    // Push registers to chosen stack (PSR, PC, LR, R12, R3, R2, R1, R0)
+    sp -= 4; write_memory_word(sp, m_registers->get_psr());         // xPSR
     sp -= 4; write_memory_word(sp, return_address);                 // PC (return address)
     sp -= 4; write_memory_word(sp, m_registers->get_lr());          // LR
     sp -= 4; write_memory_word(sp, m_registers->read_register(12)); // R12
@@ -431,12 +483,21 @@ void CPU::push_exception_stack_frame(uint32_t return_address)
     sp -= 4; write_memory_word(sp, m_registers->read_register(2));  // R2
     sp -= 4; write_memory_word(sp, m_registers->read_register(1));  // R1
     sp -= 4; write_memory_word(sp, m_registers->read_register(0));  // R0
-    
-    // Update stack pointer
-    m_registers->set_sp(sp);
-    
-    // Set LR to exception return value (0xFFFFFFF9 for thread mode, main stack)
-    m_registers->set_lr(0xFFFFFFF9);
+
+    // Write back the updated stack pointer to the correct bank
+    if (thread_used_psp) {
+        m_registers->set_psp(sp);
+        // LR encoding for return to Thread using PSP
+        m_registers->set_lr(0xFFFFFFFDu);
+    } else if (in_handler) {
+        m_registers->set_msp(sp);
+        // LR encoding for return to Handler using MSP
+        m_registers->set_lr(0xFFFFFFF1u);
+    } else {
+        m_registers->set_msp(sp);
+        // LR encoding for return to Thread using MSP
+        m_registers->set_lr(0xFFFFFFF9u);
+    }
 }
 
 void CPU::write_memory_word(uint32_t address, uint32_t data)

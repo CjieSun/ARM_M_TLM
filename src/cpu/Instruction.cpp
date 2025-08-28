@@ -270,6 +270,14 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
     
     // Format 12: Add offset to Stack Pointer and PUSH/POP (1011xxxx)
     if ((opcode_field & 0x3C) == 0x2C) {
+        // Check for CPS (Change Processor State): 1011 0110 011x xxxx (0xB660-0xB67F)
+        if ((instruction & 0xFFE0) == 0xB660) {
+            fields.type = INST_T16_CPS;
+            fields.alu_op = (instruction & 0x10) ? 1 : 0; // 1=CPSID, 0=CPSIE  
+            fields.imm = instruction & 0x7; // interrupt mask bits (I=1, F=2, IF=3)
+            return fields;
+        }
+        
         // First check for extend/pack instructions: 1011001000xxxxxx (0xB200-0xB2FF)
         if ((instruction & 0xFF00) == 0xB200) {
             // Extend instructions: SXTH, SXTB, UXTH, UXTB
@@ -411,6 +419,57 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
         return fields;
     }
 
+    // Memory barrier instructions (T32)
+    // Format: 11110 01110111 1111 10 00 0000 option
+    // DSB: f3bf 8f4f (option=15, SY)
+    // DMB: f3bf 8f5f (option=15, SY) 
+    // ISB: f3bf 8f6f (option=15, SY)
+    if ((first_half & 0xFFF0) == 0xF3B0 && (second_half & 0xFF00) == 0x8F00) {
+        uint32_t op = (second_half >> 4) & 0xF;
+        uint32_t option = second_half & 0xF;
+        
+        switch (op) {
+            case 0x4: // DSB
+                fields.type = INST_T32_DSB;
+                break;
+            case 0x5: // DMB
+                fields.type = INST_T32_DMB;
+                break;
+            case 0x6: // ISB
+                fields.type = INST_T32_ISB;
+                break;
+            default:
+                fields.type = INST_UNKNOWN;
+                return fields;
+        }
+        
+        fields.imm = option; // Store barrier option
+        return fields;
+    }
+
+    // MSR instructions (T32)
+    // Format: 11110 0111000 xxxx 1000 xxxx xxxx xxxx
+    // f380 8809 - MSR PSP, r0
+    // f380 8814 - MSR CONTROL, r0
+    if ((first_half & 0xFFE0) == 0xF380 && (second_half & 0xFF00) == 0x8800) {
+        fields.type = INST_T32_MSR;
+        fields.rn = first_half & 0xF; // source register
+        uint32_t spec_reg = second_half & 0xFF; // special register encoding
+        fields.imm = spec_reg; // Store special register number
+        return fields;
+    }
+
+    // MRS instructions (T32)
+    // Format: 11110 0111110 1111 1000 xxxx xxxx xxxx
+    // f3ef 8xxx - MRS rx, spec_reg
+    if ((first_half & 0xFFFF) == 0xF3EF && (second_half & 0xF000) == 0x8000) {
+        fields.type = INST_T32_MRS;
+        fields.rd = (second_half >> 8) & 0xF; // destination register
+        uint32_t spec_reg = second_half & 0xFF; // special register encoding
+        fields.imm = spec_reg; // Store special register number
+        return fields;
+    }
+
     // Unknown/unsupported T32 on ARMv6-M
     fields.type = INST_UNKNOWN;
     return fields;
@@ -418,7 +477,11 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
 
 bool Instruction::is_32bit_instruction(uint32_t instruction)
 {
-    // ARMv6-M: Only BL is 32-bit (first halfword 11110)
+    // Check if this is a 32-bit Thumb-2 instruction
     uint16_t first_half = (uint16_t)(instruction & 0xFFFF);
-    return (first_half & 0xF800) == 0xF000;
+    
+    // 32-bit instructions start with specific bit patterns in first halfword:
+    // 11110 - BL and other T32 instructions
+    // 11111 - More T32 instructions
+    return ((first_half & 0xF800) == 0xF000) || ((first_half & 0xF800) == 0xF800);
 }

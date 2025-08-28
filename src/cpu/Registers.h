@@ -125,7 +125,7 @@ public:
 private:
     // ARM Cortex-M0 registers (R0-R12)
     uint32_t m_gpr[13];  // General Purpose Registers R0-R12
-    uint32_t m_sp;       // Stack Pointer (R13) - deprecated, use m_msp/m_psp
+    //uint32_t m_sp;       // Stack Pointer (R13) - deprecated, use m_msp/m_psp
     uint32_t m_lr;       // Link Register (R14)  
     uint32_t m_pc;       // Program Counter (R15)
     uint32_t m_psr;      // Program Status Register (xPSR)

@@ -4,7 +4,7 @@
 
 Registers::Registers(sc_module_name name) : 
     sc_module(name),
-    m_sp(0x20001000),    // Kept for backward compatibility
+    //m_sp(0x20001000),    // Kept for backward compatibility
     m_lr(0x00000000),
     m_pc(0x00000000),
     m_psr(0x01000000),   // Default xPSR with Thumb bit set (bit 24)
@@ -76,7 +76,7 @@ void Registers::reset()
         m_gpr[i] = 0;
     }
     
-    m_sp = 0x20001000;     // Kept for backward compatibility
+    //m_sp = 0x20001000;     // Kept for backward compatibility
     m_lr = 0x00000000;
     m_pc = 0x00000000;
     m_psr = 0x01000000;    // Default xPSR with Thumb bit set (bit 24)
