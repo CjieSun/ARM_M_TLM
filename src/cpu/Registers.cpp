@@ -4,10 +4,14 @@
 
 Registers::Registers(sc_module_name name) : 
     sc_module(name),
-    m_sp(0x20001000),  // Default stack pointer
+    m_sp(0x20001000),    // Kept for backward compatibility
     m_lr(0x00000000),
     m_pc(0x00000000),
-    m_psr(0x00000000)
+    m_psr(0x01000000),   // Default xPSR with Thumb bit set (bit 24)
+    m_primask(0x00000000), // Interrupts enabled by default
+    m_control(0x00000000), // Privileged mode, MSP selected
+    m_msp(0x20001000),   // Main Stack Pointer - default to top of RAM
+    m_psp(0x00000000)    // Process Stack Pointer - initialized to 0
 {
     // Initialize general purpose registers to 0
     for (int i = 0; i < 13; i++) {
@@ -26,7 +30,7 @@ uint32_t Registers::read_register(uint8_t reg_num)
     if (reg_num < 13) {
         value = m_gpr[reg_num];
     } else if (reg_num == 13) {
-        value = m_sp;
+        value = get_current_sp();  // Use current SP based on CONTROL.SPSEL
     } else if (reg_num == 14) {
         value = m_lr;
     } else if (reg_num == 15) {
@@ -50,7 +54,7 @@ void Registers::write_register(uint8_t reg_num, uint32_t value)
     if (reg_num < 13) {
         m_gpr[reg_num] = value;
     } else if (reg_num == 13) {
-        m_sp = value;
+        set_current_sp(value);  // Set current SP based on CONTROL.SPSEL
     } else if (reg_num == 14) {
         m_lr = value;
     } else if (reg_num == 15) {
@@ -72,10 +76,16 @@ void Registers::reset()
         m_gpr[i] = 0;
     }
     
-    m_sp = 0x20001000;  // Default stack pointer
+    m_sp = 0x20001000;     // Kept for backward compatibility
     m_lr = 0x00000000;
     m_pc = 0x00000000;
-    m_psr = 0x00000000;
+    m_psr = 0x01000000;    // Default xPSR with Thumb bit set (bit 24)
+    
+    // Reset special registers
+    m_primask = 0x00000000; // Interrupts enabled
+    m_control = 0x00000000; // Privileged mode, MSP selected
+    m_msp = 0x20001000;     // Main Stack Pointer
+    m_psp = 0x00000000;     // Process Stack Pointer
     
     LOG_INFO("Registers reset");
 }
