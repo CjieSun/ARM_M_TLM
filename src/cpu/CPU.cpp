@@ -5,6 +5,7 @@
 #include "GDBServer.h"
 #include <sstream>
 #include <stdexcept>
+#include <cstring>
 
 CPU::CPU(sc_module_name name) : 
     sc_module(name),
@@ -121,58 +122,104 @@ void CPU::cpu_thread()
 
 uint32_t CPU::fetch_instruction(uint32_t address)
 {
+    // DMI fast path
+    if (m_inst_dmi_valid && address >= m_inst_dmi.get_start_address() && address + 3 <= m_inst_dmi.get_end_address()) {
+        auto base = m_inst_dmi.get_dmi_ptr();
+        uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_inst_dmi.get_start_address());
+        uint32_t val = 0;
+        std::memcpy(&val, base + off, sizeof(uint32_t));
+        wait(m_inst_dmi.get_read_latency());
+        return val;
+    }
+
+    // Try to acquire DMI for this address
+    tlm_generic_payload dmi_req;
+    tlm_dmi dmi_data;
+    dmi_req.set_command(TLM_READ_COMMAND);
+    dmi_req.set_address(address);
+    if (inst_bus->get_direct_mem_ptr(dmi_req, dmi_data)) {
+        m_inst_dmi = dmi_data;
+        m_inst_dmi_valid = true;
+        if (address >= m_inst_dmi.get_start_address() && address + 3 <= m_inst_dmi.get_end_address()) {
+            auto base = m_inst_dmi.get_dmi_ptr();
+            uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_inst_dmi.get_start_address());
+            uint32_t val = 0;
+            std::memcpy(&val, base + off, sizeof(uint32_t));
+            wait(m_inst_dmi.get_read_latency());
+            return val;
+        }
+    }
+
+    // Fallback to regular TLM
     tlm_generic_payload trans;
     sc_time delay = SC_ZERO_TIME;
     uint32_t instruction = 0;
-    
-    // Set up transaction
     trans.set_command(TLM_READ_COMMAND);
     trans.set_address(address);
     trans.set_data_ptr(reinterpret_cast<unsigned char*>(&instruction));
     trans.set_data_length(4);
     trans.set_streaming_width(4);
     trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed(false);
+    trans.set_dmi_allowed(true);
     trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
-    
-    // Call transport
     inst_bus->b_transport(trans, delay);
-    
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
         std::stringstream ss; ss << "Instruction fetch failed at address 0x" << std::hex << address;
         LOG_ERROR(ss.str());
         return 0;
     }
-    
     wait(delay);
     return instruction;
 }
 
 uint32_t CPU::read_memory_word(uint32_t address)
 {
+    // DMI fast path (data bus)
+    if (m_data_dmi_valid && address >= m_data_dmi.get_start_address() && address + 3 <= m_data_dmi.get_end_address()) {
+        auto base = m_data_dmi.get_dmi_ptr();
+        uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+        uint32_t val = 0;
+        std::memcpy(&val, base + off, sizeof(uint32_t));
+        wait(m_data_dmi.get_read_latency());
+        return val;
+    }
+
+    // Try to acquire DMI for this address on data bus
+    tlm_generic_payload dmi_req;
+    tlm_dmi dmi_data;
+    dmi_req.set_command(TLM_READ_COMMAND);
+    dmi_req.set_address(address);
+    if (data_bus->get_direct_mem_ptr(dmi_req, dmi_data)) {
+        m_data_dmi = dmi_data;
+        m_data_dmi_valid = true;
+        if (address >= m_data_dmi.get_start_address() && address + 3 <= m_data_dmi.get_end_address()) {
+            auto base = m_data_dmi.get_dmi_ptr();
+            uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+            uint32_t val = 0;
+            std::memcpy(&val, base + off, sizeof(uint32_t));
+            wait(m_data_dmi.get_read_latency());
+            return val;
+        }
+    }
+
+    // Fallback to regular TLM
     tlm_generic_payload trans;
     sc_time delay = SC_ZERO_TIME;
     uint32_t data = 0;
-    
-    // Set up transaction
     trans.set_command(TLM_READ_COMMAND);
     trans.set_address(address);
     trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
     trans.set_data_length(4);
     trans.set_streaming_width(4);
     trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed(false);
+    trans.set_dmi_allowed(true);
     trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
-    
-    // Call transport via data bus
     data_bus->b_transport(trans, delay);
-    
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
         std::stringstream ss; ss << "Memory read failed at address 0x" << std::hex << address;
         LOG_ERROR(ss.str());
         return 0;
     }
-    
     wait(delay);
     return data;
 }
@@ -502,20 +549,46 @@ void CPU::push_exception_stack_frame(uint32_t return_address)
 
 void CPU::write_memory_word(uint32_t address, uint32_t data)
 {
+    // DMI fast path for writes
+    if (m_data_dmi_valid && address >= m_data_dmi.get_start_address() && address + 3 <= m_data_dmi.get_end_address()) {
+        if (m_data_dmi.is_write_allowed()) {
+            auto base = m_data_dmi.get_dmi_ptr();
+            uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+            std::memcpy(base + off, &data, sizeof(uint32_t));
+            wait(m_data_dmi.get_write_latency());
+            return;
+        }
+    }
+
+    // Try to acquire DMI for writes
+    tlm_generic_payload dmi_req;
+    tlm_dmi dmi_data;
+    dmi_req.set_command(TLM_WRITE_COMMAND);
+    dmi_req.set_address(address);
+    if (data_bus->get_direct_mem_ptr(dmi_req, dmi_data)) {
+        m_data_dmi = dmi_data;
+        m_data_dmi_valid = true;
+        if (address >= m_data_dmi.get_start_address() && address + 3 <= m_data_dmi.get_end_address() && m_data_dmi.is_write_allowed()) {
+            auto base = m_data_dmi.get_dmi_ptr();
+            uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+            std::memcpy(base + off, &data, sizeof(uint32_t));
+            wait(m_data_dmi.get_write_latency());
+            return;
+        }
+    }
+
+    // Fallback to regular TLM
     tlm_generic_payload trans;
     sc_time delay = SC_ZERO_TIME;
-    
     trans.set_command(TLM_WRITE_COMMAND);
     trans.set_address(address);
     trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
     trans.set_data_length(4);
     trans.set_streaming_width(4);
     trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed(false);
+    trans.set_dmi_allowed(true);
     trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
-    
     data_bus->b_transport(trans, delay);
-    
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
         std::stringstream ss; ss << "Memory write failed at address: 0x" << std::hex << address;
         LOG_ERROR(ss.str());

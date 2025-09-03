@@ -32,6 +32,9 @@ public:
 private:
     Registers* m_registers;
     CPU* m_cpu { nullptr };
+    // DMI cache for data bus accesses from Execute
+    bool m_data_dmi_valid { false };
+    tlm_dmi m_data_dmi;
     
     // Execution methods for different instruction types
     bool execute_branch(const InstructionFields& fields);

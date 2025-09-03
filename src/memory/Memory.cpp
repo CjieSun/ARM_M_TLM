@@ -205,7 +205,31 @@ void Memory::write_word(uint32_t address, uint32_t data)
 
 bool Memory::get_direct_mem_ptr(tlm_generic_payload& trans, tlm_dmi& dmi_data)
 {
-    // Disable DMI for simplicity with absolute address translation
+    uint32_t abs_addr = trans.get_address();
+
+    // Provide DMI for FLASH and SRAM regions. We expose the entire region for
+    // whichever space the address falls into.
+    if (abs_addr >= FLASH_BASE && abs_addr < FLASH_BASE + FLASH_SIZE) {
+        dmi_data.set_start_address(FLASH_BASE);
+        dmi_data.set_end_address(FLASH_BASE + FLASH_SIZE - 1);
+        dmi_data.set_dmi_ptr(reinterpret_cast<unsigned char*>(m_memory + FLASH_OFFSET));
+        dmi_data.set_granted_access(tlm_dmi::DMI_ACCESS_READ); // Flash is read-only
+        dmi_data.set_read_latency(sc_time(1, SC_NS));
+        dmi_data.set_write_latency(sc_time(1, SC_NS));
+        return true;
+    }
+
+    if (abs_addr >= SRAM_BASE && abs_addr < SRAM_BASE + SRAM_SIZE) {
+        dmi_data.set_start_address(SRAM_BASE);
+        dmi_data.set_end_address(SRAM_BASE + SRAM_SIZE - 1);
+        dmi_data.set_dmi_ptr(reinterpret_cast<unsigned char*>(m_memory + SRAM_OFFSET));
+        dmi_data.set_granted_access(tlm_dmi::DMI_ACCESS_READ_WRITE); // SRAM R/W
+        dmi_data.set_read_latency(sc_time(1, SC_NS));
+        dmi_data.set_write_latency(sc_time(1, SC_NS));
+        return true;
+    }
+
+    // Peripherals / unmapped: no DMI
     return false;
 }
 

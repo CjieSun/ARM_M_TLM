@@ -76,6 +76,8 @@ void NVIC::handle_read(tlm_generic_payload& trans)
         case NVIC_STK_CTRL:
             *data_ptr = m_stk_ctrl;
             trans.set_response_status(TLM_OK_RESPONSE);
+            // COUNTFLAG (bit16) is cleared on read
+            m_stk_ctrl &= ~(1u << 16);
             goto log_and_return;
         case NVIC_STK_LOAD:
             *data_ptr = m_stk_load & 0x00FFFFFFu;
@@ -168,17 +170,26 @@ void NVIC::handle_write(tlm_generic_payload& trans)
             m_stk_ctrl = (m_stk_ctrl & (1u<<16)) | (*data_ptr & 0x00010007u);
             // If ENABLE cleared, also clear COUNTFLAG
             if ((m_stk_ctrl & 1u) == 0) m_stk_ctrl &= ~(1u<<16);
-            LOG_INFO("NVIC: STK_CTRL write - old=0x" + std::to_string(old) + " new=0x" + std::to_string(m_stk_ctrl));
+            LOG_DEBUG("NVIC: STK_CTRL write - old=0x" + std::to_string(old) + " new=0x" + std::to_string(m_stk_ctrl));
+            // (Re)schedule SysTick timing
+            m_systick_seq++;
+            m_systick_wake.notify(SC_ZERO_TIME);
             (void)old;
             break;
         }
         case NVIC_STK_LOAD:
             m_stk_load = *data_ptr & 0x00FFFFFFu;
-            LOG_INFO("NVIC: STK_LOAD write - value=" + std::to_string(m_stk_load));
+            LOG_DEBUG("NVIC: STK_LOAD write - value=" + std::to_string(m_stk_load));
+            // (Re)program VAL side-effect in some SW; we'll just reschedule
+            m_systick_seq++;
+            m_systick_wake.notify(SC_ZERO_TIME);
             break;
         case NVIC_STK_VAL:
             m_stk_val = *data_ptr & 0x00FFFFFFu;
-            LOG_INFO("NVIC: STK_VAL write - value=" + std::to_string(m_stk_val));
+            LOG_DEBUG("NVIC: STK_VAL write - value=" + std::to_string(m_stk_val));
+            // Reset current count; reschedule
+            m_systick_seq++;
+            m_systick_wake.notify(SC_ZERO_TIME);
             break;
         case NVIC_STK_CALIB:
             // Read-only; ignore writes
@@ -366,27 +377,49 @@ void NVIC::systick_thread()
 {
     LOG_INFO("NVIC: SysTick thread started");
     while (true) {
-        // Tick granularity: 1 us in this model for simplicity
-        wait(1, SC_US);
-        // Only tick when ENABLE is set
+        // Wait until (re)programmed
+        wait(m_systick_wake);
+
+        // Snapshot sequence to detect reprogramming during wait
+        uint64_t seq = m_systick_seq;
+
+        // If disabled or LOAD==0, do nothing until next program
+        if ((m_stk_ctrl & 1u) == 0 || (m_stk_load & 0x00FFFFFFu) == 0) {
+            continue;
+        }
+
+        // If VAL is zero, reload now (per ARM, on next tick; we approximate immediate reload)
+        if ((m_stk_val & 0x00FFFFFFu) == 0) {
+            m_stk_val = m_stk_load & 0x00FFFFFFu;
+        }
+
+        // Model time per tick. If CLKSOURCE=1 and core 48MHz was assumed, 1 tick ~ 1/48MHz.
+        // We won't tie to CPU cycles yet; use a coarse nanosecond scale proportional to remaining counts.
+        // Choose 1 tick = 1 ns nominal; then remaining delay = VAL ns.
+        sc_time per_tick = sc_time(1, SC_NS);
+        uint32_t remaining = m_stk_val & 0x00FFFFFFu;
+        sc_time delay = per_tick * remaining;
+
+        // Schedule timeout
+        wait(delay);
+
+        // If reprogrammed in between, skip firing
+        if (seq != m_systick_seq) {
+            continue;
+        }
+
+        // Timeout: set COUNTFLAG and reload VAL
+        m_stk_ctrl |= (1u << 16);
+        m_stk_val = m_stk_load & 0x00FFFFFFu;
+
+        // If TICKINT, raise SysTick
+        if (m_stk_ctrl & (1u << 1)) {
+            trigger_systick();
+        }
+
+        // If still enabled, schedule the next period immediately
         if (m_stk_ctrl & 1u) {
-            LOG_DEBUG("NVIC: SysTick enabled, VAL=" + std::to_string(m_stk_val) + ", LOAD=" + std::to_string(m_stk_load));
-            if (m_stk_val == 0) {
-                // Reload behavior
-                m_stk_val = (m_stk_load & 0x00FFFFFFu);
-                // Set COUNTFLAG
-                m_stk_ctrl |= (1u << 16);
-                LOG_INFO("NVIC: SysTick timeout - reloaded VAL=" + std::to_string(m_stk_val));
-                // If TICKINT is set, raise SysTick exception (15)
-                if (m_stk_ctrl & (1u << 1)) {
-                    trigger_systick();
-                }
-            } else {
-                m_stk_val = (m_stk_val - 1) & 0x00FFFFFFu;
-                if ((m_stk_val % 100) == 0) { // Log every 100ms
-                    LOG_DEBUG("NVIC: SysTick counting - VAL=" + std::to_string(m_stk_val));
-                }
-            }
+            m_systick_wake.notify(SC_ZERO_TIME);
         }
     }
 }

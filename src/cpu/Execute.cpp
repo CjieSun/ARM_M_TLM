@@ -4,6 +4,7 @@
 #include "Log.h"
 #include <sstream>
 #include <iomanip>
+#include <cstring>
 
 // CPU is included above for request_svc; we keep using its initiator socket type too
 
@@ -721,67 +722,125 @@ void Execute::update_flags(uint32_t result, bool carry, bool overflow)
 
 uint32_t Execute::read_memory(uint32_t address, uint32_t size, void* socket)
 {
+    auto* bus = static_cast<tlm_utils::simple_initiator_socket<CPU>*>(socket);
+
+    // DMI fast path (cache retained across calls)
+    if (m_data_dmi_valid && address >= m_data_dmi.get_start_address() && (address + size - 1) <= m_data_dmi.get_end_address()) {
+        auto base = m_data_dmi.get_dmi_ptr();
+        uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+        uint32_t val = 0;
+        std::memcpy(&val, base + off, size);
+        wait(m_data_dmi.get_read_latency());
+        Performance::getInstance().increment_memory_reads();
+        if (Log::getInstance().get_log_level() >= LOG_TRACE) {
+            Log::getInstance().log_memory_access(address, val, size, false);
+        }
+        return val;
+    }
+
+    // Try to acquire new DMI
+    tlm_generic_payload dmi_req;
+    tlm_dmi dmi_data;
+    dmi_req.set_command(TLM_READ_COMMAND);
+    dmi_req.set_address(address);
+    if ((*bus)->get_direct_mem_ptr(dmi_req, dmi_data)) {
+        m_data_dmi = dmi_data;
+        m_data_dmi_valid = true;
+        if (address >= m_data_dmi.get_start_address() && (address + size - 1) <= m_data_dmi.get_end_address()) {
+            auto base = m_data_dmi.get_dmi_ptr();
+            uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+            uint32_t val = 0;
+            std::memcpy(&val, base + off, size);
+            wait(m_data_dmi.get_read_latency());
+            Performance::getInstance().increment_memory_reads();
+            if (Log::getInstance().get_log_level() >= LOG_TRACE) {
+                Log::getInstance().log_memory_access(address, val, size, false);
+            }
+            return val;
+        }
+    }
+
+    // Fallback to TLM b_transport
     tlm_generic_payload trans;
     sc_time delay = SC_ZERO_TIME;
     uint32_t data = 0;
-    
     trans.set_command(TLM_READ_COMMAND);
     trans.set_address(address);
     trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
     trans.set_data_length(size);
     trans.set_streaming_width(size);
     trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed(false);
+    trans.set_dmi_allowed(true);
     trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
-
-    // Use the provided initiator socket to perform the transaction
-    auto* bus = static_cast<tlm_utils::simple_initiator_socket<CPU>*>(socket);
-    // Dereference the socket pointer to use operator-> provided by simple_initiator_socket
     (*bus)->b_transport(trans, delay);
-
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
         LOG_ERROR("Data read failed at address " + hex32(address));
         return 0;
     }
-
     wait(delay);
-
     Performance::getInstance().increment_memory_reads();
-
     if (Log::getInstance().get_log_level() >= LOG_TRACE) {
         Log::getInstance().log_memory_access(address, data, size, false);
     }
-
     return data;
 }
 
 void Execute::write_memory(uint32_t address, uint32_t data, uint32_t size, void* socket)
 {
+    auto* bus = static_cast<tlm_utils::simple_initiator_socket<CPU>*>(socket);
+
+    // DMI fast path for writes
+    if (m_data_dmi_valid && address >= m_data_dmi.get_start_address() && (address + size - 1) <= m_data_dmi.get_end_address() && m_data_dmi.is_write_allowed()) {
+        auto base = m_data_dmi.get_dmi_ptr();
+        uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+        std::memcpy(base + off, &data, size);
+        wait(m_data_dmi.get_write_latency());
+        Performance::getInstance().increment_memory_writes();
+        if (Log::getInstance().get_log_level() >= LOG_TRACE) {
+            Log::getInstance().log_memory_access(address, data, size, true);
+        }
+        return;
+    }
+
+    // Try to acquire DMI
+    tlm_generic_payload dmi_req;
+    tlm_dmi dmi_data;
+    dmi_req.set_command(TLM_WRITE_COMMAND);
+    dmi_req.set_address(address);
+    if ((*bus)->get_direct_mem_ptr(dmi_req, dmi_data)) {
+        m_data_dmi = dmi_data;
+        m_data_dmi_valid = true;
+        if (address >= m_data_dmi.get_start_address() && (address + size - 1) <= m_data_dmi.get_end_address() && m_data_dmi.is_write_allowed()) {
+            auto base = m_data_dmi.get_dmi_ptr();
+            uint64_t off = static_cast<uint64_t>(address) - static_cast<uint64_t>(m_data_dmi.get_start_address());
+            std::memcpy(base + off, &data, size);
+            wait(m_data_dmi.get_write_latency());
+            Performance::getInstance().increment_memory_writes();
+            if (Log::getInstance().get_log_level() >= LOG_TRACE) {
+                Log::getInstance().log_memory_access(address, data, size, true);
+            }
+            return;
+        }
+    }
+
+    // Fallback to TLM
     tlm_generic_payload trans;
     sc_time delay = SC_ZERO_TIME;
-    
     trans.set_command(TLM_WRITE_COMMAND);
     trans.set_address(address);
     trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
     trans.set_data_length(size);
     trans.set_streaming_width(size);
     trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed(false);
+    trans.set_dmi_allowed(true);
     trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
-    
-    auto* bus = static_cast<tlm_utils::simple_initiator_socket<CPU>*>(socket);
-    // Dereference the socket pointer to use operator-> provided by simple_initiator_socket
     (*bus)->b_transport(trans, delay);
-
     if (trans.get_response_status() != TLM_OK_RESPONSE) {
         LOG_ERROR("Data write failed at address " + hex32(address));
         return;
     }
-
     wait(delay);
-
     Performance::getInstance().increment_memory_writes();
-    
     if (Log::getInstance().get_log_level() >= LOG_TRACE) {
         Log::getInstance().log_memory_access(address, data, size, true);
     }

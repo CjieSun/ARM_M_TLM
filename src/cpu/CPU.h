@@ -87,6 +87,12 @@ private:
     bool m_single_step;
     bool m_debug_paused;
     class GDBServer* m_gdb_server;
+
+    // DMI caches
+    bool m_inst_dmi_valid = false;
+    bool m_data_dmi_valid = false;
+    tlm_dmi m_inst_dmi;
+    tlm_dmi m_data_dmi;
     
     // Helper methods
     uint32_t fetch_instruction(uint32_t address);

@@ -68,6 +68,9 @@ private:
 
     // SysTick ticking thread
     void systick_thread();
+    sc_event m_systick_wake;     // Wakes/retimes the SysTick scheduler
+    sc_event m_systick_timeout;  // Timeout event for next SysTick expiry
+    uint64_t m_systick_seq { 0 }; // Bumps on reprogram to invalidate old timeouts
 
     // Helper methods
     void handle_read(tlm_generic_payload& trans);
