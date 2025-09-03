@@ -1,5 +1,6 @@
 #include "Execute.h"
 #include "CPU.h" // For calling request_svc on SVC execution
+#include "ARM_CortexM_Config.h"
 #include "Performance.h"
 #include "Log.h"
 #include <sstream>
@@ -32,8 +33,12 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T16_B_COND:
         case INST_T16_B:
         case INST_T16_BX:
+#if HAS_BLX_REGISTER
         case INST_T16_BLX:
+#endif
+#if HAS_T32_BL
         case INST_T32_BL:
+#endif
             pc_changed = execute_branch(fields);
             break;
         // Data processing
@@ -122,12 +127,15 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T16_SVC:
             pc_changed = execute_exception(fields);
             break;
+#if HAS_MEMORY_BARRIERS
         // T32 Memory barriers
         case INST_T32_DSB:
         case INST_T32_DMB:
         case INST_T32_ISB:
             pc_changed = execute_memory_barrier(fields);
             break;
+#endif
+#if HAS_SYSTEM_REGISTERS
         // T32 System register access
         case INST_T32_MSR:
             pc_changed = execute_msr(fields);
@@ -135,8 +143,9 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_MRS:
             pc_changed = execute_mrs(fields);
             break;
+#endif
         default:
-            LOG_WARNING("Unknown instruction type");
+            LOG_WARNING("Unknown instruction type: " + std::to_string(fields.type) + " (may not be supported in " ARM_CORE_NAME ")");
             break;
     }
     
@@ -161,8 +170,12 @@ bool Execute::execute_branch(const InstructionFields& fields)
         
         // Check if this is BLX (bit 7 set in original encoding would indicate BLX)
         if ((fields.opcode & 0x0080) != 0) {
+#if HAS_BLX_REGISTER
             // BLX - save return address in LR
             m_registers->write_register(14, current_pc + 2 + 1); // +1 for Thumb bit
+#else
+            LOG_WARNING("BLX instruction not supported in " ARM_CORE_NAME ", treating as BX");
+#endif
         }
         
         // BX to EXC_RETURN magic value should perform an exception return
@@ -176,7 +189,11 @@ bool Execute::execute_branch(const InstructionFields& fields)
         m_registers->set_pc(new_pc & ~1);
         
     LOG_DEBUG("BX/BLX to " + hex32(new_pc));
+#if HAS_T32_BL
     } else if (fields.type == INST_T32_BL || fields.alu_op == 1) {
+#else
+    } else if (fields.alu_op == 1) {
+#endif
         // BL instruction (Thumb): PC is current + 4; fields.imm is halfword offset
         int32_t byte_off = static_cast<int32_t>(fields.imm) * 2;
         new_pc = current_pc + 4 + byte_off;

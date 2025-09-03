@@ -1,10 +1,11 @@
 #include "Instruction.h"
+#include "ARM_CortexM_Config.h"
 #include "Log.h"
 #include <sstream>
 
 Instruction::Instruction(sc_module_name name) : sc_module(name)
 {
-    LOG_INFO("Instruction decoder initialized");
+    LOG_INFO("Instruction decoder initialized for " ARM_CORE_NAME " (" ARM_ARCH_NAME ")");
 }
 
 InstructionFields Instruction::decode(uint32_t instruction, bool is_32bit)
@@ -166,7 +167,19 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
             case 0: fields.type = INST_T16_ADD_HI; break;
             case 1: fields.type = INST_T16_CMP_HI; break;
             case 2: fields.type = INST_T16_MOV_HI; break;
+#if HAS_BLX_REGISTER
             case 3: fields.type = ((instruction & 0x0080) ? INST_T16_BLX : INST_T16_BX); break;
+#else
+            case 3: 
+                if (instruction & 0x0080) {
+                    // BLX not supported in this architecture, treat as undefined
+                    LOG_WARNING("BLX instruction not supported in " ARM_CORE_NAME);
+                    fields.type = INST_UNKNOWN;
+                } else {
+                    fields.type = INST_T16_BX;
+                }
+                break;
+#endif
         }
         return fields;
     }
@@ -395,6 +408,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
     uint16_t first_half = instruction & 0xFFFF;
     uint16_t second_half = (instruction >> 16) & 0xFFFF;
 
+#if HAS_T32_BL
     // ARMv6-M supports only BL as 32-bit T32 instruction
     if ((first_half & 0xF800) == 0xF000 && (second_half & 0xD000) == 0xD000) {
         uint32_t S     = (first_half >> 10) & 0x1;
@@ -410,7 +424,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
         uint32_t imm25 = (S << 24) | (I1 << 23) | (I2 << 22) | (imm10 << 12) | (imm11 << 1);
         int32_t signed_imm = (imm25 & 0x01000000) ? (int32_t)(imm25 | 0xFE000000) : (int32_t)imm25;
 
-    fields.type = INST_T32_BL;
+        fields.type = INST_T32_BL;
         fields.cond = 0xE; // Always
         // For compatibility with Execute::execute_branch (which multiplies imm by 2),
         // store halfword offset here
@@ -418,7 +432,9 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
         fields.alu_op = 1; // BL marker
         return fields;
     }
+#endif
 
+#if HAS_MEMORY_BARRIERS
     // Memory barrier instructions (T32)
     // Format: 11110 01110111 1111 10 00 0000 option
     // DSB: f3bf 8f4f (option=15, SY)
@@ -446,7 +462,9 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
         fields.imm = option; // Store barrier option
         return fields;
     }
+#endif
 
+#if HAS_SYSTEM_REGISTERS
     // MSR instructions (T32)
     // Format: 11110 0111000 xxxx 1000 xxxx xxxx xxxx
     // f380 8809 - MSR PSP, r0
@@ -469,8 +487,9 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
         fields.imm = spec_reg; // Store special register number
         return fields;
     }
+#endif
 
-    // Unknown/unsupported T32 on ARMv6-M
+    // Unknown/unsupported T32 instruction for this architecture
     fields.type = INST_UNKNOWN;
     return fields;
 }

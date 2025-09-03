@@ -5,6 +5,17 @@ project(ARM_M_TLM)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ARM Architecture Configuration
+# Set default to Cortex-M0+ if not specified
+if(NOT DEFINED ARM_CORE_TYPE)
+    set(ARM_CORE_TYPE "CORTEX_M0_PLUS")
+endif()
+
+# Define the core type for compilation
+add_compile_definitions(ARM_CORE_TYPE=${ARM_CORE_TYPE})
+
+message(STATUS "Building for ARM Core: ${ARM_CORE_TYPE}")
+
 # Find SystemC
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SYSTEMC REQUIRED systemc)

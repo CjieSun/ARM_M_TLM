@@ -3,6 +3,7 @@
 
 #include <systemc>
 #include <cstdint>
+#include "ARM_CortexM_Config.h"
 
 using namespace sc_core;
 
@@ -51,7 +52,9 @@ enum InstructionType {
     INST_T16_CMP_HI,            // CMP Rd(H), Rm
     INST_T16_MOV_HI,            // MOV Rd(H), Rm
     INST_T16_BX,                // BX Rm
-    INST_T16_BLX,               // BLX Rm (not in M0)
+#if HAS_BLX_REGISTER
+    INST_T16_BLX,               // BLX Rm (not in M0/M0+)
+#endif
 
     // --- T16: PC-relative load --- (Format 6)
     INST_T16_LDR_PC,            // LDR Rd, [PC, #imm]
@@ -107,26 +110,65 @@ enum InstructionType {
     INST_T16_BKPT,              // BKPT #imm8
     INST_T16_HINT,              // NOP/WFI/WFE/YIELD/SEV
 
+#if HAS_T32_BL
     // --- T32: (ARMv6-M supports only BL) ---
     INST_T32_BL,                // BL label
+#endif
     
+#if HAS_MEMORY_BARRIERS
     // --- T32: Memory barriers (ARMv6-M+) ---
     INST_T32_DSB,               // DSB #option
     INST_T32_DMB,               // DMB #option  
     INST_T32_ISB,               // ISB #option
+#endif
     
+#if HAS_SYSTEM_REGISTERS
     // --- T32: System register access ---
     INST_T32_MSR,               // MSR spec_reg, Rn
     INST_T32_MRS,               // MRS Rd, spec_reg
+#endif
 
-    // Backward-compat aliases (temporary, for incremental refactors)
-    INST_BRANCH_COND = INST_T16_B_COND,
-    INST_BRANCH_UNCOND = INST_T16_B,
-    INST_BRANCH_LINK = INST_T32_BL,
-    INST_EXCEPTION = INST_T16_SVC,
-    INST_SWI = INST_T16_SVC,
-    INST_MISCELLANEOUS = INST_T16_HINT,
-    INST_LOAD_STORE_MULTIPLE = INST_T16_STMIA, // use with reg_list/load_store_bit
+#if SUPPORTS_ARMV7_M
+    // --- T32: ARMv7-M Extended Instructions ---
+    INST_T32_CBZ,               // CBZ Rn, label
+    INST_T32_CBNZ,              // CBNZ Rn, label
+    INST_T32_IT,                // IT (If-Then)
+#endif
+
+#if HAS_HARDWARE_DIVIDE
+    // --- T32: Hardware Divide (ARMv7-M+) ---
+    INST_T32_UDIV,              // UDIV Rd, Rn, Rm
+    INST_T32_SDIV,              // SDIV Rd, Rn, Rm
+#endif
+
+#if HAS_BITFIELD_INSTRUCTIONS
+    // --- T32: Bitfield Instructions (ARMv7-M+) ---
+    INST_T32_BFI,               // BFI Rd, Rn, #lsb, #width
+    INST_T32_BFC,               // BFC Rd, #lsb, #width
+    INST_T32_UBFX,              // UBFX Rd, Rn, #lsb, #width
+    INST_T32_SBFX,              // SBFX Rd, Rn, #lsb, #width
+#endif
+
+#if HAS_SATURATING_ARITHMETIC
+    // --- T32: Saturating Arithmetic (ARMv7-M+) ---
+    INST_T32_SSAT,              // SSAT Rd, #imm, Rn
+    INST_T32_USAT,              // USAT Rd, #imm, Rn
+#endif
+
+#if SUPPORTS_ARMV7E_M && HAS_DSP_EXTENSIONS
+    // --- T32: DSP Extensions (ARMv7E-M) ---
+    INST_T32_SMUL,              // SMUL variants
+    INST_T32_SMLAL,             // SMLAL variants
+    INST_T32_QADD,              // QADD Rd, Rn, Rm
+    INST_T32_QSUB,              // QSUB Rd, Rn, Rm
+#endif
+
+#if SUPPORTS_ARMV8_M && HAS_SECURITY_EXTENSIONS
+    // --- T32: ARMv8-M Security Extensions ---
+    INST_T32_SG,                // SG (Secure Gateway)
+    INST_T32_BLXNS,             // BLXNS (Branch and Link, Non-Secure)
+    INST_T32_BXNS,              // BXNS (Branch, Non-Secure)
+#endif
 };
 
 // Instruction fields structure
