@@ -1,5 +1,5 @@
-#ifndef ARM_CORTEXM_CONFIG_H
-#define ARM_CORTEXM_CONFIG_H
+#ifndef ARMV6M_CONFIG_H
+#define ARMV6M_CONFIG_H
 
 // ARM Cortex-M Architecture Version Control
 // Define which ARM architecture version to target
@@ -72,26 +72,14 @@
     #define HAS_HARDWARE_DIVIDE 1
     #define HAS_SATURATING_ARITHMETIC 1
     #define HAS_BITFIELD_INSTRUCTIONS 1
-    #define HAS_BIT_MANIPULATION 1      // CLZ, RBIT, REV instructions
     #define HAS_TABLE_BRANCH 1
-    #define HAS_CBZ_CBNZ 1              // Compare and Branch Zero/Non-Zero
-    #define HAS_IT_BLOCKS 1             // IT (If-Then) conditional execution
-    #define HAS_EXTENDED_HINTS 1        // WFI, WFE, SEV, YIELD
-    #define HAS_EXCLUSIVE_ACCESS 1      // LDREX/STREX instructions
-    #define HAS_BARRIER_INSTRUCTIONS 1  // Enhanced barrier support
 #else
     #define HAS_T32_EXTENDED_INSTRUCTIONS 0
     #define HAS_ADVANCED_SIMD 0
     #define HAS_HARDWARE_DIVIDE 0
     #define HAS_SATURATING_ARITHMETIC 0
     #define HAS_BITFIELD_INSTRUCTIONS 0
-    #define HAS_BIT_MANIPULATION 0
     #define HAS_TABLE_BRANCH 0
-    #define HAS_CBZ_CBNZ 0
-    #define HAS_IT_BLOCKS 0
-    #define HAS_EXTENDED_HINTS 0
-    #define HAS_EXCLUSIVE_ACCESS 0
-    #define HAS_BARRIER_INSTRUCTIONS 0
 #endif
 
 #if SUPPORTS_ARMV7E_M
@@ -162,4 +150,4 @@
     #define ARM_ARCH_NAME "ARMv8-M"
 #endif
 
-#endif // ARM_CORTEXM_CONFIG_H
+#endif // ARMV6M_CONFIG_H

@@ -34,6 +34,12 @@ public:
     uint32_t get_primask() const { return m_primask; }
     void set_primask(uint32_t primask) { m_primask = primask & 0x1; }  // Only bit 0 is valid
     
+    uint32_t get_basepri() const { return m_basepri; }
+    void set_basepri(uint32_t basepri) { m_basepri = basepri & 0xFF; }  // 8-bit priority value
+    
+    uint32_t get_faultmask() const { return m_faultmask; }
+    void set_faultmask(uint32_t faultmask) { m_faultmask = faultmask & 0x1; }  // Only bit 0 is valid
+    
     uint32_t get_control() const { return m_control; }
     void set_control(uint32_t control) { m_control = control & 0x3; }  // Only bits 1-0 are valid
     
@@ -44,9 +50,19 @@ public:
     uint32_t get_psp() const { return m_psp; }
     void set_psp(uint32_t psp) { m_psp = psp; }
     
-    // Current stack pointer based on CONTROL.SPSEL
-    uint32_t get_current_sp() const { return (m_control & 0x2) ? m_psp : m_msp; }
+    // Current stack pointer selection
+    // In Handler mode (IPSR != 0), SP always refers to MSP regardless of CONTROL.SPSEL (ARMv7-M)
+    uint32_t get_current_sp() const {
+        if (is_in_exception()) {
+            return m_msp;
+        }
+        return (m_control & 0x2) ? m_psp : m_msp;
+    }
     void set_current_sp(uint32_t sp) {
+        if (is_in_exception()) {
+            m_msp = sp;
+            return;
+        }
         if (m_control & 0x2) {
             m_psp = sp;
         } else {
@@ -119,6 +135,65 @@ public:
     void enter_exception(uint32_t exception_num) { set_ipsr(exception_num); }
     void exit_exception() { set_ipsr(0); }
     
+    // IT (If-Then) block state management (ARMv7-M)
+    bool in_it_block() const { return m_it_len > 0 && m_it_index < m_it_len; }
+    uint8_t get_it_firstcond() const { return m_it_firstcond; }
+    // Return bit0 of firstcond (cccc[0])
+    uint8_t get_it_firstcond0() const { return (m_it_firstcond & 0x1); }
+    uint8_t get_it_mask() const { return m_it_mask; }
+    uint8_t get_it_index() const { return m_it_index; }
+    uint8_t get_it_len() const { return m_it_len; }
+    void advance_it_state() {
+        if (m_it_len == 0) return;
+        ++m_it_index;
+        if (m_it_index >= m_it_len) {
+            // End of IT block
+            m_it_firstcond = 0;
+            m_it_mask = 0;
+            m_it_len = 0;
+            m_it_index = 0;
+        }
+    }
+    void clear_it_state() { m_it_firstcond = 0; m_it_len = 0; m_it_index = 0; m_it_mask = 0; }
+
+    // Enhanced IT helpers
+    void start_it(uint8_t cond, uint8_t mask) {
+        // Store condition and raw mask (xyz1 encoding per ARM ARM)
+        m_it_mask = mask;
+        m_it_firstcond = cond;
+
+        // Determine number of following instructions (len) from mask
+        // Valid masks and lengths:
+        // 0x8:1, 0xC:2, 0xE:3, 0xF:4, 0x4:2, 0x6:3, 0x7:4, 0x2:3, 0x3:4, 0x1:4
+        switch (mask) {
+            case 0x8: m_it_len = 1; break;
+            case 0xC: m_it_len = 2; break;
+            case 0xE: m_it_len = 3; break;
+            case 0xF: m_it_len = 4; break;
+            case 0xD: m_it_len = 4; break;
+            case 0x4: m_it_len = 2; break;
+            case 0x6: m_it_len = 3; break;
+            case 0x7: m_it_len = 4; break;
+            case 0x2: m_it_len = 3; break;
+            case 0x3: m_it_len = 4; break;
+            case 0x1: m_it_len = 4; break;
+            default:  m_it_len = 0; break; // invalid mask
+        }
+
+        // Index of current instruction within IT block (0..m_it_len-1)
+        m_it_index = 0;
+    }
+    bool current_it_then() const {
+        if (m_it_len == 0 || m_it_index >= m_it_len) return true; // default Then
+        if (m_it_index == 0) return true; // First instruction is always Then
+
+        // For subsequent instructions, letters map to bits:
+        // slot 1 -> bit3 (x), slot 2 -> bit2 (y), slot 3 -> bit1 (z)
+        int pos = 4 - static_cast<int>(m_it_index); // 1->3, 2->2, 3->1
+        if (pos < 1 || pos > 3) return true; // Safety
+        return ((m_it_mask >> pos) & 0x1) == (m_it_firstcond & 0x1);
+    }
+    
     // Reset
     void reset();
 
@@ -132,9 +207,17 @@ private:
     
     // ARM Cortex-M special registers
     uint32_t m_primask;  // PRIMASK - interrupt mask
+    uint32_t m_basepri;  // BASEPRI - base priority register
+    uint32_t m_faultmask; // FAULTMASK - fault mask register
     uint32_t m_control;  // CONTROL - privilege level and stack selection
     uint32_t m_msp;      // Main Stack Pointer
     uint32_t m_psp;      // Process Stack Pointer
+    
+    // IT (If-Then) block state (ARMv7-M)
+    uint8_t m_it_firstcond; // IT firstcond
+    uint8_t m_it_mask;     // IT mask
+    uint8_t m_it_len;     // Number of instructions in IT block (1..4)
+    uint8_t m_it_index;   // Current instruction index within IT block
 };
 
 #endif // REGISTERS_H

@@ -1,6 +1,7 @@
 #include "Log.h"
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 
 Log& Log::getInstance()
 {
@@ -124,4 +125,11 @@ void Log::write_to_outputs(const std::string& message)
         m_log_file << message << std::endl;
         m_log_file.flush();
     }
+}
+
+// Format 32-bit values as 0xhhhhhhhh
+std::string Log::hex32(uint32_t v) {
+    std::ostringstream oss;
+    oss << "0x" << std::hex << std::nouppercase << std::setw(8) << std::setfill('0') << v;
+    return oss.str();
 }

@@ -110,8 +110,21 @@ enum InstructionType {
     INST_T16_BKPT,              // BKPT #imm8
     INST_T16_HINT,              // NOP/WFI/WFE/YIELD/SEV
 
+#if SUPPORTS_ARMV7_M
+    // --- T16: ARMv7-M Extended 16-bit Instructions ---
+    INST_T16_CBZ,               // CBZ Rn, label
+    INST_T16_CBNZ,              // CBNZ Rn, label
+    INST_T16_IT,                // IT (If-Then)
+    INST_T16_WFI,               // WFI (Wait for Interrupt)
+    INST_T16_WFE,               // WFE (Wait for Event)  
+    INST_T16_SEV,               // SEV (Send Event)
+    INST_T16_YIELD,             // YIELD
+#endif
+
 #if HAS_T32_BL
-    // --- T32: (ARMv6-M supports only BL) ---
+    // --- T32: Branch Instructions ---
+    INST_T32_B,                 // B label (unconditional)
+    INST_T32_B_COND,            // B<cond> label (conditional)
     INST_T32_BL,                // BL label
 #endif
     
@@ -130,15 +143,119 @@ enum InstructionType {
 
 #if SUPPORTS_ARMV7_M
     // --- T32: ARMv7-M Extended Instructions ---
-    INST_T32_CBZ,               // CBZ Rn, label
-    INST_T32_CBNZ,              // CBNZ Rn, label
-    INST_T32_IT,                // IT (If-Then)
+    INST_T32_CBZ,               // CBZ Rn, label (also 32-bit variant)
+    INST_T32_CBNZ,              // CBNZ Rn, label (also 32-bit variant)
+    INST_T32_IT,                // IT (If-Then) (also 32-bit variant)
+    INST_T32_TBB,               // TBB [Rn, Rm] (Table Branch Byte)
+    INST_T32_TBH,               // TBH [Rn, Rm, LSL #1] (Table Branch Halfword)
+    INST_T32_CLREX,             // CLREX (Clear Exclusive)
+    
+    // --- T32: Data Processing Instructions ---
+    INST_T32_MOV_IMM,           // MOV.W Rd, #imm
+    INST_T32_MVN_IMM,           // MVN.W Rd, #imm
+    INST_T32_ADD_IMM,           // ADD.W Rd, Rn, #imm
+    INST_T32_SUB_IMM,           // SUB.W Rd, Rn, #imm
+    INST_T32_ADC_IMM,           // ADC.W Rd, Rn, #imm
+    INST_T32_SBC_IMM,           // SBC.W Rd, Rn, #imm
+    INST_T32_RSB_IMM,           // RSB.W Rd, Rn, #imm
+    INST_T32_AND_IMM,           // AND.W Rd, Rn, #imm
+    INST_T32_ORR_IMM,           // ORR.W Rd, Rn, #imm
+    INST_T32_EOR_IMM,           // EOR.W Rd, Rn, #imm
+    INST_T32_BIC_IMM,           // BIC.W Rd, Rn, #imm
+    INST_T32_CMP_IMM,           // CMP.W Rn, #imm
+    INST_T32_CMN_IMM,           // CMN.W Rn, #imm
+    INST_T32_TST_IMM,           // TST.W Rn, #imm
+    INST_T32_TEQ_IMM,           // TEQ.W Rn, #imm
+    
+    // --- T32: Data Processing Instructions (Register operands) ---
+    INST_T32_AND_REG,           // AND.W Rd, Rn, Rm{, shift}
+    INST_T32_ANDS_REG,          // ANDS.W Rd, Rn, Rm{, shift}
+    INST_T32_ORR_REG,           // ORR.W Rd, Rn, Rm{, shift}
+    INST_T32_ORRS_REG,          // ORRS.W Rd, Rn, Rm{, shift}
+    INST_T32_ORN_REG,           // ORN.W Rd, Rn, Rm{, shift}
+    INST_T32_ORNS_REG,          // ORNS.W Rd, Rn, Rm{, shift}
+    INST_T32_EOR_REG,           // EOR.W Rd, Rn, Rm{, shift}
+    INST_T32_EORS_REG,          // EORS.W Rd, Rn, Rm{, shift}
+    INST_T32_BIC_REG,           // BIC.W Rd, Rn, Rm{, shift}
+    INST_T32_BICS_REG,          // BICS.W Rd, Rn, Rm{, shift}
+    INST_T32_ADD_REG,           // ADD.W Rd, Rn, Rm{, shift}
+    INST_T32_ADDS_REG,          // ADDS.W Rd, Rn, Rm{, shift}
+    INST_T32_SUB_REG,           // SUB.W Rd, Rn, Rm{, shift}
+    INST_T32_SUBS_REG,          // SUBS.W Rd, Rn, Rm{, shift}
+    INST_T32_ADC_REG,           // ADC.W Rd, Rn, Rm{, shift}
+    INST_T32_ADCS_REG,          // ADCS.W Rd, Rn, Rm{, shift}
+    INST_T32_SBC_REG,           // SBC.W Rd, Rn, Rm{, shift}
+    INST_T32_SBCS_REG,          // SBCS.W Rd, Rn, Rm{, shift}
+    INST_T32_RSB_REG,           // RSB.W Rd, Rn, Rm{, shift}
+    INST_T32_RSBS_REG,          // RSBS.W Rd, Rn, Rm{, shift}
+    INST_T32_MOV_REG,           // MOV.W Rd, Rm{, shift}
+    INST_T32_MOVS_REG,          // MOVS.W Rd, Rm{, shift}
+    INST_T32_MVN_REG,           // MVN.W Rd, Rm{, shift}
+    INST_T32_MVNS_REG,          // MVNS.W Rd, Rm{, shift}
+    INST_T32_PKH_REG,           // PKH Rd, Rn, Rm{, shift}
+    INST_T32_TST_REG,           // TST.W Rn, Rm{, shift}
+    INST_T32_TEQ_REG,           // TEQ.W Rn, Rm{, shift}
+    INST_T32_CMP_REG,           // CMP.W Rn, Rm{, shift}
+    INST_T32_CMN_REG,           // CMN.W Rn, Rm{, shift}
+    
+    // --- T32: Shift Instructions (register) ---
+    INST_T32_LSL_REG,           // LSL.W Rd, Rm, Rs
+    INST_T32_LSLS_REG,          // LSLS.W Rd, Rm, Rs  
+    INST_T32_LSR_REG,           // LSR.W Rd, Rm, Rs
+    INST_T32_LSRS_REG,          // LSRS.W Rd, Rm, Rs
+    INST_T32_ASR_REG,           // ASR.W Rd, Rm, Rs
+    INST_T32_ASRS_REG,          // ASRS.W Rd, Rm, Rs
+    INST_T32_ROR_REG,           // ROR.W Rd, Rm, Rs
+    INST_T32_RORS_REG,          // RORS.W Rd, Rm, Rs
+    
+    // --- T32: Load/Store Instructions ---
+    INST_T32_LDR_IMM,           // LDR.W Rt, [Rn, #imm]
+    INST_T32_LDRB_IMM,          // LDRB.W Rt, [Rn, #imm]
+    INST_T32_LDRH_IMM,          // LDRH.W Rt, [Rn, #imm]
+    INST_T32_LDRSB_IMM,         // LDRSB.W Rt, [Rn, #imm]
+    INST_T32_LDRSH_IMM,         // LDRSH.W Rt, [Rn, #imm]
+    INST_T32_STR_IMM,           // STR.W Rt, [Rn, #imm]
+    INST_T32_STRB_IMM,          // STRB.W Rt, [Rn, #imm]
+    INST_T32_STRH_IMM,          // STRH.W Rt, [Rn, #imm]
+    INST_T32_STR_PRE_POST,      // STR.W Rt, [Rn, #imm]! or [Rn], #imm
+    INST_T32_STRB_PRE_POST,     // STRB.W Rt, [Rn, #imm]! or [Rn], #imm
+    INST_T32_STRH_PRE_POST,     // STRH.W Rt, [Rn, #imm]! or [Rn], #imm
+    INST_T32_LDR_PRE_POST,      // LDR.W Rt, [Rn, #imm]! or [Rn], #imm
+    INST_T32_LDRB_PRE_POST,     // LDRB.W Rt, [Rn, #imm]! or [Rn], #imm
+    INST_T32_LDRH_PRE_POST,     // LDRH.W Rt, [Rn, #imm]! or [Rn], #imm
+    INST_T32_LDR_PC,            // LDR.W Rt, [PC, #imm]
+    INST_T32_LDRD,              // LDRD Rt, Rt2, [Rn, #imm]
+    INST_T32_STRD,              // STRD Rt, Rt2, [Rn, #imm]
+    
+    // --- T32: Multiple Load/Store Instructions ---
+    INST_T32_LDMIA,             // LDMIA.W Rn!, {reglist}
+    INST_T32_LDMDB,             // LDMDB.W Rn!, {reglist}
+    INST_T32_STMIA,             // STMIA.W Rn!, {reglist}
+    INST_T32_STMDB,             // STMDB.W Rn!, {reglist}
+#endif
+
+#if HAS_EXCLUSIVE_ACCESS
+    // --- T32: Exclusive Access Instructions (ARMv7-M+) ---
+    INST_T32_LDREX,             // LDREX Rt, [Rn]
+    INST_T32_STREX,             // STREX Rd, Rt, [Rn]
+    INST_T32_LDREXB,            // LDREXB Rt, [Rn]
+    INST_T32_STREXB,            // STREXB Rd, Rt, [Rn]
+    INST_T32_LDREXH,            // LDREXH Rt, [Rn]
+    INST_T32_STREXH,            // STREXH Rd, Rt, [Rn]
 #endif
 
 #if HAS_HARDWARE_DIVIDE
     // --- T32: Hardware Divide (ARMv7-M+) ---
     INST_T32_UDIV,              // UDIV Rd, Rn, Rm
     INST_T32_SDIV,              // SDIV Rd, Rn, Rm
+    INST_T32_MLA,               // MLA Rd, Rn, Rm, Ra
+    INST_T32_MLS,               // MLS Rd, Rn, Rm, Ra
+    
+    // --- T32: Long Multiply Instructions ---
+    INST_T32_UMULL,             // UMULL RdLo, RdHi, Rn, Rm
+    INST_T32_SMULL,             // SMULL RdLo, RdHi, Rn, Rm
+    INST_T32_UMLAL,             // UMLAL RdLo, RdHi, Rn, Rm
+    INST_T32_SMLAL_,            // SMLAL RdLo, RdHi, Rn, Rm
 #endif
 
 #if HAS_BITFIELD_INSTRUCTIONS
@@ -153,6 +270,15 @@ enum InstructionType {
     // --- T32: Saturating Arithmetic (ARMv7-M+) ---
     INST_T32_SSAT,              // SSAT Rd, #imm, Rn
     INST_T32_USAT,              // USAT Rd, #imm, Rn
+#endif
+
+#if HAS_BIT_MANIPULATION
+    // --- T32: Bit Manipulation Instructions (ARMv7-M+) ---
+    INST_T32_CLZ,               // CLZ Rd, Rm (Count Leading Zeros)
+    INST_T32_RBIT,              // RBIT Rd, Rm (Reverse Bits)
+    INST_T32_REV,               // REV Rd, Rm (Byte-Reverse Word)
+    INST_T32_REV16,             // REV16 Rd, Rm (Byte-Reverse Packed Halfword)
+    INST_T32_REVSH,             // REVSH Rd, Rm (Byte-Reverse Signed Halfword)
 #endif
 
 #if SUPPORTS_ARMV7E_M && HAS_DSP_EXTENSIONS
@@ -188,6 +314,9 @@ struct InstructionFields {
     uint16_t reg_list;   // Register list for multiple load/store
     bool load_store_bit; // Load (1) or Store (0)
     uint8_t byte_word;   // Byte (1) or Word (0)
+    bool pre_indexed;    // Pre-indexed (1) or post-indexed (0) addressing
+    bool writeback;      // Writeback to base register
+    bool negative_offset; // Negative offset for immediate addressing
     bool is_32bit;       // True if 32-bit instruction
     InstructionType type;
 };
@@ -209,6 +338,9 @@ private:
     // Core Thumb instruction decoding functions
     InstructionFields decode_thumb16_instruction(uint16_t instruction);
     InstructionFields decode_thumb32_instruction(uint32_t instruction);
+    
+    // T32 helper functions
+    uint32_t decode_t32_modified_immediate(uint32_t i, uint32_t imm3, uint32_t imm8);
 };
 
 #endif // INSTRUCTION_H

@@ -51,6 +51,8 @@ public:
     // Close log file
     void close();
 
+    std::string hex32(uint32_t v);
+
 private:
     // Singleton pattern
     Log() : m_log_level(LOG_INFO), m_console_output(true), m_file_open(false) {}

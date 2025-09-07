@@ -9,9 +9,15 @@ Registers::Registers(sc_module_name name) :
     m_pc(0x00000000),
     m_psr(0x01000000),   // Default xPSR with Thumb bit set (bit 24)
     m_primask(0x00000000), // Interrupts enabled by default
+    m_basepri(0x00000000), // No base priority masking
+    m_faultmask(0x00000000), // Fault interrupts enabled
     m_control(0x00000000), // Privileged mode, MSP selected
     m_msp(0x20001000),   // Main Stack Pointer - default to top of RAM
-    m_psp(0x00000000)    // Process Stack Pointer - initialized to 0
+    m_psp(0x00000000),    // Process Stack Pointer - initialized to 0
+    m_it_firstcond(0x00), // No IT block active initially
+    m_it_mask(0x00),       // No IT block active initially
+    m_it_len(0x00),       // No IT block active initially
+    m_it_index(0x00)      // No IT block active initially
 {
     // Initialize general purpose registers to 0
     for (int i = 0; i < 13; i++) {
@@ -83,9 +89,15 @@ void Registers::reset()
     
     // Reset special registers
     m_primask = 0x00000000; // Interrupts enabled
+    m_basepri = 0x00000000; // No base priority masking
+    m_faultmask = 0x00000000; // Fault interrupts enabled
     m_control = 0x00000000; // Privileged mode, MSP selected
     m_msp = 0x20001000;     // Main Stack Pointer
     m_psp = 0x00000000;     // Process Stack Pointer
-    
+    m_it_firstcond = 0x00;      // No IT block active
+    m_it_mask = 0x00;      // No IT block active
+    m_it_len = 0x00;      // No IT block active
+    m_it_index = 0x00;      // No IT block active
+
     LOG_INFO("Registers reset");
 }

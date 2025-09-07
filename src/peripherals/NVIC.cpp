@@ -220,7 +220,7 @@ void NVIC::handle_write(tlm_generic_payload& trans)
             m_shpr3 = value;
             break;
         case NVIC_ICSR: {
-            LOG_INFO("NVIC_ICSR" + std::to_string(value));
+            //LOG_INFO("NVIC_ICSR" + std::to_string(value));
             // Handle PENDSVSET (bit 28) and PENDSVCLR (bit 27)
             if (value & (1u << 28)) {
                 // Pend PendSV
