@@ -50,6 +50,15 @@ This directory contains comprehensive assembly language tests for the ARMv6-M Th
    - Subroutine-based test structure
    - Comprehensive instruction interaction testing
 
+7. **`armv7m_test.s`** - ARMv7-M specific instruction tests (Cortex-M3 architecture):
+   - IT (If-Then) conditional execution blocks: IT, ITE, ITEE
+   - Byte load/store operations: STRB, LDRB with immediate and register offsets
+   - Multiple load/store operations: STMIA, LDMIA with writeback
+   - Unsigned multiply long: UMULL (64-bit result)
+   - Multiply accumulate: MLA (Rd = Rn*Rm + Ra)
+   - Multiply subtract: MLS (Rd = Ra - Rn*Rm)
+   - Compiled with `-mcpu=cortex-m3` flags for ARMv7-M support
+
 ## Building and Running Tests
 
 ### Prerequisites
@@ -67,6 +76,7 @@ This directory contains comprehensive assembly language tests for the ARMv6-M Th
 - `simple_load_store_multiple_test.s` - Multiple load/store (LDM/STM)
 - `simple_comprehensive_test.s` - Combined basic operations
 - `c_test.c` - C language test with bare-metal entry point
+- `armv7m_test.s` - ARMv7-M specific instruction tests (IT blocks, UMULL, MLA, MLS, STRB/LDRB, STMIA/LDMIA)
 
 **⚠️ Original Complex Tests (compilation issues resolved by simplified versions):**
 - `miscellaneous_test.s`, `load_store_multiple_test.s`, `comprehensive_test.s`
@@ -77,11 +87,14 @@ This directory contains comprehensive assembly language tests for the ARMv6-M Th
 # Check if toolchain is available
 make check-toolchain
 
-# Build all working tests (7 tests total)
+# Build all working tests (8 tests total)
 make all
 
 # Build individual test
 make data_processing_test.hex
+
+# Build ARMv7-M test specifically  
+make armv7m_test.hex
 
 # Clean build artifacts
 make clean
@@ -97,9 +110,13 @@ make run-branch
 make run-multiple
 make run-misc
 make run-comprehensive
+make run-armv7m
 
 # Run all tests
 make run-all
+
+# Run only ARMv7-M tests
+make run-armv7m
 
 # Generate documentation
 make doc
