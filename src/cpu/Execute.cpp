@@ -93,18 +93,23 @@ static std::string format_address(uint8_t rn, int32_t offset, bool pre_indexed, 
     std::ostringstream oss;
     oss << "[" << reg_name(rn);
     
-    if (offset != 0) {
-        if (pre_indexed) {
-            oss << ", #" << (negative_offset ? -offset : offset);
-        }
+    // For pre-indexed addressing, include offset inside brackets
+    if (pre_indexed && offset != 0) {
+        oss << ", #" << (negative_offset ? -static_cast<int32_t>(offset) : static_cast<int32_t>(offset));
     }
     
     oss << "]";
     
+    // Add writeback marker for pre-indexed, or offset for post-indexed
     if (writeback) {
-        oss << "!";
-    } else if (!pre_indexed && offset != 0) {
-        oss << ", #" << (negative_offset ? -offset : offset);
+        if (pre_indexed) {
+            oss << "!";  // Pre-indexed with writeback: [rn, #offset]!
+        } else {
+            // Post-indexed: [rn], #offset
+            if (offset != 0) {
+                oss << ", #" << (negative_offset ? -static_cast<int32_t>(offset) : static_cast<int32_t>(offset));
+            }
+        }
     }
     
     return oss.str();
@@ -538,43 +543,22 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << "strh.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, true, false, false);
             break;
         case INST_T32_STR_PRE_POST:
-            oss << "str.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, false);
+            oss << "str.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, fields.negative_offset);
             break;
         case INST_T32_STRB_PRE_POST:
-            oss << "strb.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, false);
-            if (fields.pre_indexed) {
-                oss << "strb.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << (int32_t)fields.imm << "]!";
-            } else {
-                oss << "strb.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "], #" << (int32_t)fields.imm;
-            }
+            oss << "strb.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, fields.negative_offset);
             break;
         case INST_T32_STRH_PRE_POST:
-            if (fields.pre_indexed) {
-                oss << "strh.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << (int32_t)fields.imm << "]!";
-            } else {
-                oss << "strh.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "], #" << (int32_t)fields.imm;
-            }
+            oss << "strh.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, fields.negative_offset);
             break;
         case INST_T32_LDR_PRE_POST:
-            if (fields.pre_indexed) {
-                oss << "ldr.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << (int32_t)fields.imm << "]!";
-            } else {
-                oss << "ldr.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "], #" << (int32_t)fields.imm;
-            }
+            oss << "ldr.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, fields.negative_offset);
             break;
         case INST_T32_LDRB_PRE_POST:
-            if (fields.pre_indexed) {
-                oss << "ldrb.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << (int32_t)fields.imm << "]!";
-            } else {
-                oss << "ldrb.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "], #" << (int32_t)fields.imm;
-            }
+            oss << "ldrb.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, fields.negative_offset);
             break;
         case INST_T32_LDRH_PRE_POST:
-            if (fields.pre_indexed) {
-                oss << "ldrh.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << (int32_t)fields.imm << "]!";
-            } else {
-                oss << "ldrh.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "], #" << (int32_t)fields.imm;
-            }
+            oss << "ldrh.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, fields.negative_offset);
             break;
         case INST_T32_LDRSB_IMM:
             oss << "ldrsb.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
@@ -893,7 +877,7 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         ss << std::hex << (fields.opcode & 0xFFFF) << ": ";
     }
     // Log only when we're going to execute (or if IT not built)
-    LOG_DEBUG("EXEC: " + ss.str() + format_instruction(fields));
+    LOG_DEBUG(ss.str() + format_instruction(fields));
 
     bool pc_changed = false;
     
@@ -2774,9 +2758,11 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
     } else if (is_pre_post_indexed) {
         // Pre/post indexed addressing
         uint32_t base_addr = m_registers->read_register(fields.rn);
+        int32_t signed_offset = fields.negative_offset ? -(int32_t)fields.imm : (int32_t)fields.imm;
+        
         if (fields.pre_indexed) {
             // Pre-indexed: [Rn, #offset]! - adjust address before access
-            address = base_addr + fields.imm;
+            address = base_addr + signed_offset;
         } else {
             // Post-indexed: [Rn], #offset - use base address, adjust after access
             address = base_addr;
@@ -2914,13 +2900,16 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
     
     // Handle writeback for pre/post indexed addressing
     if (is_pre_post_indexed && fields.writeback) {
+        uint32_t base_addr = m_registers->read_register(fields.rn);
+        int32_t signed_offset = fields.negative_offset ? -(int32_t)fields.imm : (int32_t)fields.imm;
         uint32_t new_base;
+        
         if (fields.pre_indexed) {
             // Pre-indexed: base already updated to address
             new_base = address;
         } else {
             // Post-indexed: update base with offset
-            new_base = m_registers->read_register(fields.rn) + fields.imm;
+            new_base = base_addr + signed_offset;
         }
         m_registers->write_register(fields.rn, new_base);
         LOG_TRACE("[REG] WRITE R" + std::to_string(fields.rn) + " = 0x" + hex32(new_base) + " (writeback)");

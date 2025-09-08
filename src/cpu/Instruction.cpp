@@ -1043,7 +1043,8 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             if (p_bit && w_bit) {
                 fields.rn = rn;
                 fields.rd = rt;
-                fields.imm = u_bit ? imm8 : (uint32_t)(~imm8 + 1); // sign via U
+                fields.imm = imm8; // Always store positive value
+                fields.negative_offset = !u_bit; // U=0 means negative
                 fields.load_store_bit = is_load;
                 fields.pre_indexed = true;
                 fields.writeback = true;
@@ -1059,7 +1060,8 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             if (!p_bit && w_bit) {
                 fields.rn = rn;
                 fields.rd = rt;
-                fields.imm = u_bit ? imm8 : (uint32_t)(~imm8 + 1);
+                fields.imm = imm8; // Always store positive value
+                fields.negative_offset = !u_bit; // U=0 means negative
                 fields.load_store_bit = is_load;
                 fields.pre_indexed = false;
                 fields.writeback = true;
