@@ -79,6 +79,7 @@
     #define HAS_EXTENDED_HINTS 1        // WFI, WFE, SEV, YIELD
     #define HAS_EXCLUSIVE_ACCESS 1      // LDREX/STREX instructions
     #define HAS_BARRIER_INSTRUCTIONS 1  // Enhanced barrier support
+    #define HAS_MULTIPLY_INSTRUCTIONS 1 // MUL, MLA, MLS
 #else
     #define HAS_T32_EXTENDED_INSTRUCTIONS 0
     #define HAS_ADVANCED_SIMD 0
@@ -92,6 +93,7 @@
     #define HAS_EXTENDED_HINTS 0
     #define HAS_EXCLUSIVE_ACCESS 0
     #define HAS_BARRIER_INSTRUCTIONS 0
+    #define HAS_MULTIPLY_INSTRUCTIONS 0 // MUL, MLA, MLS
 #endif
 
 #if SUPPORTS_ARMV7E_M

@@ -270,7 +270,60 @@ enum InstructionType {
     INST_T32_UMULL,             // UMULL RdLo, RdHi, Rn, Rm
     INST_T32_SMULL,             // SMULL RdLo, RdHi, Rn, Rm
     INST_T32_UMLAL,             // UMLAL RdLo, RdHi, Rn, Rm
-    INST_T32_SMLAL_,            // SMLAL RdLo, RdHi, Rn, Rm
+    INST_T32_SMLAL,             // SMLAL RdLo, RdHi, Rn, Rm
+
+     // 16-bit x 16-bit = 32-bit 乘法指令
+    INST_T32_SMLABB,           // Signed Multiply Accumulate (Bottom x Bottom)
+    INST_T32_SMLABT,           // Signed Multiply Accumulate (Bottom x Top)  
+    INST_T32_SMLATB,           // Signed Multiply Accumulate (Top x Bottom)
+    INST_T32_SMLATT,           // Signed Multiply Accumulate (Top x Top)
+    INST_T32_SMLAWB,           // Signed Multiply Accumulate Word (Bottom)
+    INST_T32_SMLAWT,           // Signed Multiply Accumulate Word (Top)
+    
+    INST_T32_SMULBB,           // Signed Multiply (Bottom x Bottom)
+    INST_T32_SMULBT,           // Signed Multiply (Bottom x Top)
+    INST_T32_SMULTB,           // Signed Multiply (Top x Bottom)
+    INST_T32_SMULTT,           // Signed Multiply (Top x Top)
+    INST_T32_SMULWB,           // Signed Multiply Word (Bottom)
+    INST_T32_SMULWT,           // Signed Multiply Word (Top)
+    
+    // 双32-bit乘法累加指令
+    INST_T32_SMLAD,            // Signed Multiply Accumulate Dual
+    INST_T32_SMLADX,           // Signed Multiply Accumulate Dual (Exchange)
+    INST_T32_SMUAD,            // Signed Multiply Dual
+    INST_T32_SMUADX,           // Signed Multiply Dual (Exchange)
+    
+    INST_T32_SMLSD,            // Signed Multiply Subtract Dual
+    INST_T32_SMLSDX,           // Signed Multiply Subtract Dual (Exchange)
+    INST_T32_SMUSD,            // Signed Multiply Subtract Dual
+    INST_T32_SMUSDX,           // Signed Multiply Subtract Dual (Exchange)
+    
+    // Most Significant Word乘法指令
+    INST_T32_SMMLA,            // Signed Most Significant Word Multiply Accumulate
+    INST_T32_SMMLAR,           // Signed Most Significant Word Multiply Accumulate (Round)
+    INST_T32_SMMUL,            // Signed Most Significant Word Multiply
+    INST_T32_SMMULR,           // Signed Most Significant Word Multiply (Round)
+    INST_T32_SMMLS,            // Signed Most Significant Word Multiply Subtract
+    INST_T32_SMMLSR,           // Signed Most Significant Word Multiply Subtract (Round)
+    
+    // 无符号绝对差累加指令
+    INST_T32_USAD8,            // Unsigned Sum of Absolute Differences
+    INST_T32_USADA8,           // Unsigned Sum of Absolute Differences and Accumulate
+    
+    // 长乘法半字指令
+    INST_T32_SMLALBB,          // Signed Multiply Accumulate Long (Bottom x Bottom)
+    INST_T32_SMLALBT,          // Signed Multiply Accumulate Long (Bottom x Top)
+    INST_T32_SMLALTB,          // Signed Multiply Accumulate Long (Top x Bottom)
+    INST_T32_SMLALTT,          // Signed Multiply Accumulate Long (Top x Top)
+    
+    // 双乘法累加长指令
+    INST_T32_SMLALD,           // Signed Multiply Accumulate Long Dual
+    INST_T32_SMLALDX,          // Signed Multiply Accumulate Long Dual (Exchange)
+    INST_T32_SMLSLD,           // Signed Multiply Subtract Long Dual
+    INST_T32_SMLSLDX,          // Signed Multiply Subtract Long Dual (Exchange)
+    
+    // 无符号乘法累加累加长指令
+    INST_T32_UMAAL,            // Unsigned Multiply Accumulate Accumulate Long
 #endif
 
 #if HAS_BITFIELD_INSTRUCTIONS
@@ -304,8 +357,6 @@ enum InstructionType {
 
 #if SUPPORTS_ARMV7E_M && HAS_DSP_EXTENSIONS
     // --- T32: DSP Extensions (ARMv7E-M) ---
-    INST_T32_SMUL,              // SMUL variants
-    INST_T32_SMLAL,             // SMLAL variants
     INST_T32_QADD,              // QADD Rd, Rn, Rm
     INST_T32_QSUB,              // QSUB Rd, Rn, Rm
 #endif
@@ -385,9 +436,6 @@ enum InstructionType {
 
     // --- T32: Parallel Arithmetic Instructions ---
     INST_T32_PARALLEL_ARITH,    // Various parallel arithmetic operations
-
-    // --- T32: Long Multiply Instructions ---
-    INST_T32_SMLAL,             // SMLAL RdLo, RdHi, Rn, Rm
 };
 
 // Instruction fields structure

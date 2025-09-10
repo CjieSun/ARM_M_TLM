@@ -154,173 +154,173 @@ static std::string format_instruction(const InstructionFields& fields) {
     switch (fields.type) {
         // T16 Data Processing Instructions
         case INST_T16_LSL_IMM:
-            oss << "lsl\tr" << (int)fields.rd << ", r" << (int)fields.rm << ", #" << fields.imm;
+            oss << "lsls\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm) << ", #" << fields.imm;
             break;
         case INST_T16_LSR_IMM:
-            oss << "lsr\tr" << (int)fields.rd << ", r" << (int)fields.rm << ", #" << fields.imm;
+            oss << "lsrs\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm) << ", #" << fields.imm;
             break;
         case INST_T16_ASR_IMM:
-            oss << "asr\tr" << (int)fields.rd << ", r" << (int)fields.rm << ", #" << fields.imm;
+            oss << "asrs\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm) << ", #" << fields.imm;
             break;
         case INST_T16_ADD_REG:
-            oss << "add\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "adds\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_SUB_REG:
-            oss << "sub\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "subs\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_ADD_IMM3:
-            oss << "add\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "adds\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T16_SUB_IMM3:
-            oss << "sub\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "subs\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T16_MOV_IMM:
-            oss << "mov\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "movs\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T16_CMP_IMM:
-            oss << "cmp\tr" << (int)fields.rn << ", #" << fields.imm;
+            oss << "cmp\t" << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T16_ADD_IMM8:
-            oss << "add\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "adds\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T16_SUB_IMM8:
-            oss << "sub\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "sub\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T16_AND:
-            oss << "and\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "and\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_EOR:
-            oss << "eor\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "eor\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_LSL_REG:
-            oss << "lsl\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "lsl\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_LSR_REG:
-            oss << "lsr\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "lsr\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_ASR_REG:
-            oss << "asr\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "asr\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_ADC:
-            oss << "adc\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "adc\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_SBC:
-            oss << "sbc\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "sbc\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_ROR:
-            oss << "ror\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "ror\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_TST:
-            oss << "tst\tr" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "tst\t" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_NEG:
-            oss << "neg\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "neg\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_CMP_REG:
-            oss << "cmp\tr" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "cmp\t" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_CMN:
-            oss << "cmn\tr" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "cmn\t" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_ORR:
-            oss << "orr\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "orr\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_MUL:
-            oss << "mul\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "mul\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_BIC:
-            oss << "bic\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "bic\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_MVN:
-            oss << "mvn\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "mvn\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
 
         // T16 Extend (SXTH, SXTB, UXTH, UXTB)
         case INST_T16_EXTEND: {
             const char* ext_names[4] = {"sxth", "sxtb", "uxth", "uxtb"};
             uint8_t op = fields.alu_op & 0x3;
-            oss << ext_names[op] << "\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << ext_names[op] << "\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         }
             
         // T16 Hi Register Operations
         case INST_T16_ADD_HI:
-            oss << "add\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "add\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_CMP_HI:
-            oss << "cmp\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "cmp\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_MOV_HI:
-            oss << "mov\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "mov\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T16_BX:
-            oss << "bx\tr" << (int)fields.rm;
+            oss << "bx\t" << reg_name(fields.rm);
             break;
 #if HAS_BLX_REGISTER
         case INST_T16_BLX:
-            oss << "blx\tr" << (int)fields.rm;
+            oss << "blx\t" << reg_name(fields.rm);
             break;
 #endif
 
         // T16 Load/Store Instructions
         case INST_T16_LDR_PC:
-            oss << "ldr\tr" << (int)fields.rd << ", [pc, #" << fields.imm << "]";
+            oss << "ldr\t" << reg_name(fields.rd) << ", [pc, #" << fields.imm << "]";
             break;
         case INST_T16_STR_REG:
-            oss << "str\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "str\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_STRH_REG:
-            oss << "strh\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "strh\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_STRB_REG:
-            oss << "strb\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "strb\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_LDRSB_REG:
-            oss << "ldrsb\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "ldrsb\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_LDR_REG:
-            oss << "ldr\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "ldr\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_LDRH_REG:
-            oss << "ldrh\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "ldrh\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_LDRB_REG:
-            oss << "ldrb\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "ldrb\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_LDRSH_REG:
-            oss << "ldrsh\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "ldrsh\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T16_STR_IMM:
-            oss << "str\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "str\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T16_LDR_IMM:
-            oss << "ldr\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "ldr\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T16_STRB_IMM:
-            oss << "strb\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "strb\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T16_LDRB_IMM:
-            oss << "ldrb\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "ldrb\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T16_STRH_IMM:
-            oss << "strh\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "strh\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T16_LDRH_IMM:
-            oss << "ldrh\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "ldrh\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T16_STR_SP:
-            oss << "str\tr" << (int)fields.rd << ", [sp, #" << fields.imm << "]";
+            oss << "str\t" << reg_name(fields.rd) << ", [sp, #" << fields.imm << "]";
             break;
         case INST_T16_LDR_SP:
-            oss << "ldr\tr" << (int)fields.rd << ", [sp, #" << fields.imm << "]";
+            oss << "ldr\t" << reg_name(fields.rd) << ", [sp, #" << fields.imm << "]";
             break;
 
         // T16 Address Generation
         case INST_T16_ADD_PC:
-            oss << "add\tr" << (int)fields.rd << ", pc, #" << fields.imm;
+            oss << "add\t" << reg_name(fields.rd) << ", pc, #" << fields.imm;
             break;
         case INST_T16_ADD_SP:
-            oss << "add\tr" << (int)fields.rd << ", sp, #" << fields.imm;
+            oss << "add\t" << reg_name(fields.rd) << ", sp, #" << fields.imm;
             break;
         case INST_T16_ADD_SP_IMM7:
             oss << "add\tsp, #" << fields.imm;
@@ -331,59 +331,23 @@ static std::string format_instruction(const InstructionFields& fields) {
 
         // T16 Stack Operations
         case INST_T16_PUSH:
-            oss << "push\t{";
-            for (int i = 0; i < 8; i++) {
-                if (fields.reg_list & (1 << i)) {
-                    if (oss.str().back() != '{') oss << ", ";
-                    oss << "r" << i;
-                }
-            }
-            if (fields.reg_list & 0x100) { // LR bit
-                if (oss.str().back() != '{') oss << ", ";
-                oss << "lr";
-            }
-            oss << "}";
+            oss << "push\t" << format_reg_list(fields.reg_list);
             break;
         case INST_T16_POP:
-            oss << "pop\t{";
-            for (int i = 0; i < 8; i++) {
-                if (fields.reg_list & (1 << i)) {
-                    if (oss.str().back() != '{') oss << ", ";
-                    oss << "r" << i;
-                }
-            }
-            if (fields.reg_list & 0x100) { // PC bit
-                if (oss.str().back() != '{') oss << ", ";
-                oss << "pc";
-            }
-            oss << "}";
+            oss << "pop\t" << format_reg_list(fields.reg_list);
             break;
 
         // T16 Multiple Load/Store
         case INST_T16_STMIA:
-            oss << "stmia\tr" << (int)fields.rn << "!, {";
-            for (int i = 0; i < 8; i++) {
-                if (fields.reg_list & (1 << i)) {
-                    if (oss.str().back() != '{') oss << ", ";
-                    oss << "r" << i;
-                }
-            }
-            oss << "}";
+            oss << "stmia\t" << reg_name(fields.rn) << "!, " << format_reg_list(fields.reg_list);
             break;
         case INST_T16_LDMIA:
-            oss << "ldmia\tr" << (int)fields.rn << "!, {";
-            for (int i = 0; i < 8; i++) {
-                if (fields.reg_list & (1 << i)) {
-                    if (oss.str().back() != '{') oss << ", ";
-                    oss << "r" << i;
-                }
-            }
-            oss << "}";
+            oss << "ldmia\t" << reg_name(fields.rn) << "!, "  << format_reg_list(fields.reg_list);
             break;
 
         // T16 Branch Instructions  
         case INST_T16_B_COND: {
-            oss << "b" << cond_suffix[fields.cond] << "\t#" << (int32_t)fields.imm;
+            oss << "b" << cond_suffix(fields.cond) << "\t#" << (int32_t)fields.imm;
             break;
         }
         case INST_T16_B:
@@ -396,72 +360,72 @@ static std::string format_instruction(const InstructionFields& fields) {
 #if SUPPORTS_ARMV7_M
         // T16 ARMv7-M Extensions
         case INST_T16_CBZ:
-            oss << "cbz\tr" << (int)fields.rn << ", #" << fields.imm;
+            oss << "cbz\t" << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T16_CBNZ:
-            oss << "cbnz\tr" << (int)fields.rn << ", #" << fields.imm;
+            oss << "cbnz\t" << reg_name(fields.rn) << ", #" << fields.imm;
             break;
 
         // T32 Data Processing Instructions
         case INST_T32_MOV_IMM:
-            oss << "mov.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "mov.w" << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T32_MOVS_IMM:
-            oss << "movs.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "movs.w" << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T32_MVN_IMM:
-            oss << "mvn.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "mvn.w" << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T32_ADD_IMM:
-            oss << "add.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "add.w" << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_SUB_IMM:
-            oss << "sub.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "sub.w" << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_ADDW:
-            oss << "addw\tr" << (int)fields.rd << ", " << (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) << ", #" << fields.imm;
+            oss << "addw\t" << reg_name(fields.rd) << ", " << (fields.rn == 15 ? "pc" : "" + reg_name(fields.rn)) << ", #" << fields.imm;
             break;
         case INST_T32_SUBW:
-            oss << "subw\tr" << (int)fields.rd << ", " << (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) << ", #" << fields.imm;
+            oss << "subw\t" << reg_name(fields.rd) << ", " << (fields.rn == 15 ? "pc" : "" + reg_name(fields.rn)) << ", #" << fields.imm;
             break;
         case INST_T32_MOVW:
-            oss << "movw\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "movw\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T32_MOVT:
-            oss << "movt\tr" << (int)fields.rd << ", #" << fields.imm;
+            oss << "movt\t" << reg_name(fields.rd) << ", #" << fields.imm;
             break;
         case INST_T32_ADC_IMM:
-            oss << "adc.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "adc.w" << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_SBC_IMM:
-            oss << "sbc.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "sbc.w" << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_RSB_IMM:
-            oss << "rsb.w\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "rsb.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_AND_IMM:
-            oss << "and.w\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "and.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_ORR_IMM:
-            oss << "orr.w\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "orr.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_EOR_IMM:
-            oss << "eor.w\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "eor.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_BIC_IMM:
-            oss << "bic.w\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            oss << "bic.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_CMP_IMM:
-            oss << "cmp.w\tr" << (int)fields.rn << ", #" << fields.imm;
+            oss << "cmp.w\t" << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_CMN_IMM:
-            oss << "cmn.w\tr" << (int)fields.rn << ", #" << fields.imm;
+            oss << "cmn.w\t" << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_TST_IMM:
-            oss << "tst.w\tr" << (int)fields.rn << ", #" << fields.imm;
+            oss << "tst.w\t" << reg_name(fields.rn) << ", #" << fields.imm;
             break;
         case INST_T32_TEQ_IMM:
-            oss << "teq.w\tr" << (int)fields.rn << ", #" << fields.imm;
+            oss << "teq.w\t" << reg_name(fields.rn) << ", #" << fields.imm;
             break;
 
         // T32 Data Processing Instructions (Register operands)
@@ -483,15 +447,15 @@ static std::string format_instruction(const InstructionFields& fields) {
         case INST_T32_MOV_REG:
         case INST_T32_MOVS_REG:
             oss << (fields.type == INST_T32_MOVS_REG ? "movs.w" : "mov.w")
-                << cond_suffix(fields.cond) << "\tr" << (int)fields.rd
-                << ", r" << (int)fields.rm;
+                << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd)
+                << ", " << reg_name(fields.rm);
             //append_shift_suffix(oss, fields);
             break;
         case INST_T32_MVN_REG:
         case INST_T32_MVNS_REG:
             oss << (fields.type == INST_T32_MVNS_REG ? "mvns.w" : "mvn.w")
-                << cond_suffix(fields.cond) << "\tr" << (int)fields.rd
-                << ", r" << (int)fields.rm;
+                << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd)
+                << ", " << reg_name(fields.rm);
             //append_shift_suffix(oss, fields);
             break;
         case INST_T32_EORS_REG:
@@ -582,41 +546,103 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << "ldrh.w\t" << reg_name(fields.rd) << ", " << format_address(fields.rn, fields.imm, fields.pre_indexed, fields.writeback, fields.negative_offset);
             break;
         case INST_T32_LDRSB_IMM:
-            oss << "ldrsb.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "ldrsb.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T32_LDRSH_IMM:
-            oss << "ldrsh.w\tr" << (int)fields.rd << ", [r" << (int)fields.rn << ", #" << fields.imm << "]";
+            oss << "ldrsh.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
             break;
         case INST_T32_LDR_PC:
-            oss << "ldr.w\tr" << (int)fields.rd << ", [pc, #" << (int32_t)fields.imm << "]";
+            oss << "ldr.w\t" << reg_name(fields.rd) << ", [pc, #" << (int32_t)fields.imm << "]";
+            break;
+        case INST_T32_LDR_LIT:
+            oss << "ldr.w\t" << reg_name(fields.rd) << ", [pc, #" << (int32_t)fields.imm << "]";
+            break;
+        case INST_T32_LDR_REG:
+            oss << "ldr.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
+            break;
+        case INST_T32_LDRT:
+            oss << "ldrt\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", #" << fields.imm << "]";
+            break;
+        case INST_T32_LDRB_REG:
+            oss << "ldrb.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
+            break;
+        case INST_T32_LDRH_REG:
+            oss << "ldrh.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
+            break;
+        case INST_T32_LDRSB_REG:
+            oss << "ldrsb.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
+            break;
+        case INST_T32_LDRSH_REG:
+            oss << "ldrsh.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
+            break;
+        case INST_T32_STR_REG:
+            oss << "str.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
+            break;
+        case INST_T32_STRB_REG:
+            oss << "strb.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
+            break;
+        case INST_T32_STRH_REG:
+            oss << "strh.w\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << ", " << reg_name(fields.rm);
+            if (fields.shift_amount > 0) {
+                oss << ", lsl #" << (int)fields.shift_amount;
+            }
+            oss << "]";
             break;
         case INST_T32_LDRD:
-            oss << "ldrd\tr" << (int)fields.rd << ", r" << (int)fields.rm << ", [";
+            oss << "ldrd\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm) << ", [";
             if (fields.rn == 15) oss << "pc";
-            else oss << "r" << (int)fields.rn;
+            else oss << reg_name(fields.rn);
             oss << ", #" << fields.imm << "]";
             break;
         case INST_T32_STRD:
-            oss << "strd\tr" << (int)fields.rd << ", r" << (int)fields.rm << ", [";
+            oss << "strd\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm) << ", [";
             if (fields.rn == 15) oss << "pc";
-            else oss << "r" << (int)fields.rn;
+            else oss << reg_name(fields.rn);
             oss << ", #" << fields.imm << "]";
             break;
         // T32 Bit Manipulation
         case INST_T32_CLZ:
-            oss << "clz\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "clz\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_RBIT:
-            oss << "rbit\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "rbit\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_REV:
-            oss << "rev\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "rev\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_REV16:
-            oss << "rev16\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "rev16\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_REVSH:
-            oss << "revsh\tr" << (int)fields.rd << ", r" << (int)fields.rm;
+            oss << "revsh\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
 
         // T32 Branch and Table Branch
@@ -630,62 +656,62 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << "bl\t#" << (int32_t)fields.imm;
             break;
         case INST_T32_TBB:
-            oss << "tbb\t[r" << (int)fields.rn << ", r" << (int)fields.rm << "]";
+            oss << "tbb\t[" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
         case INST_T32_TBH:
-            oss << "tbh\t[r" << (int)fields.rn << ", r" << (int)fields.rm << ", lsl #1]";
+            oss << "tbh\t[" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << ", lsl #1]";
             break;
 
         // T32 Exclusive Access Instructions
 #if HAS_EXCLUSIVE_ACCESS
         case INST_T32_LDREX:
-            oss << "ldrex\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "]";
+            oss << "ldrex\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << "]";
             break;
         case INST_T32_STREX:
-            oss << "strex\tr" << (int)fields.rm << ", r" << (int)fields.rd << ", [r" << (int)fields.rn << "]";
+            oss << "strex\t" << reg_name(fields.rm) << ", " << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << "]";
             break;
         case INST_T32_LDREXB:
-            oss << "ldrexb\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "]";
+            oss << "ldrexb\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << "]";
             break;
         case INST_T32_STREXB:
-            oss << "strexb\tr" << (int)fields.rm << ", r" << (int)fields.rd << ", [r" << (int)fields.rn << "]";
+            oss << "strexb\t" << reg_name(fields.rm) << ", " << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << "]";
             break;
         case INST_T32_LDREXH:
-            oss << "ldrexh\tr" << (int)fields.rd << ", [r" << (int)fields.rn << "]";
+            oss << "ldrexh\t" << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << "]";
             break;
         case INST_T32_STREXH:
-            oss << "strexh\tr" << (int)fields.rm << ", r" << (int)fields.rd << ", [r" << (int)fields.rn << "]";
+            oss << "strexh\t" << reg_name(fields.rm) << ", " << reg_name(fields.rd) << ", [" << reg_name(fields.rn) << "]";
             break;
 #endif
 
         // T32 Hardware Divide
 #if HAS_HARDWARE_DIVIDE
         case INST_T32_UDIV:
-            oss << "udiv\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "udiv\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_SDIV:
-            oss << "sdiv\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "sdiv\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_MUL:
-            oss << "mul.w\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "mul.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_MLA:
-            oss << "mla\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm << ", r" << (int)fields.rs;
+            oss << "mla\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm) << ", " << (int)fields.rs;
             break;
         case INST_T32_MLS:
-            oss << "mls\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm << ", r" << (int)fields.rs;
+            oss << "mls\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm) << ", " << (int)fields.rs;
             break;
         case INST_T32_UMULL:
-            oss << "umull\tr" << (int)fields.rd << ", r" << (int)fields.rs << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "umull\t" << reg_name(fields.rd) << ", " << (int)fields.rs << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_SMULL:
-            oss << "smull\tr" << (int)fields.rd << ", r" << (int)fields.rs << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "smull\t" << reg_name(fields.rd) << ", " << (int)fields.rs << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
         case INST_T32_UMLAL:
-            oss << "umlal\tr" << (int)fields.rd << ", r" << (int)fields.rs << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            oss << "umlal\t" << reg_name(fields.rd) << ", " << (int)fields.rs << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
-        case INST_T32_SMLAL_:
-            oss << "smlal\tr" << (int)fields.rd << ", r" << (int)fields.rs << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+        case INST_T32_SMLAL:
+            oss << "smlal\t" << reg_name(fields.rd) << ", " << (int)fields.rs << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
 #endif
 
@@ -788,7 +814,7 @@ static std::string format_instruction(const InstructionFields& fields) {
                 oss << ch;
             }
 
-            oss << "\t" << cond_suffix[firstcond];
+            oss << "\t" << cond_suffix(firstcond);
             break;
         }
 #endif
@@ -796,7 +822,7 @@ static std::string format_instruction(const InstructionFields& fields) {
 #if HAS_SYSTEM_REGISTERS
         // T32 System Register Access
         case INST_T32_MRS: {
-            oss << "mrs\tr" << (int)fields.rd << ", ";
+            oss << "mrs\t" << reg_name(fields.rd) << ", ";
             switch (fields.imm) {
                 case 0: oss << "APSR"; break;
                 case 1: oss << "IAPSR"; break;
@@ -835,7 +861,7 @@ static std::string format_instruction(const InstructionFields& fields) {
                 case 20: oss << "CONTROL"; break;
                 default: oss << "SYS_" << fields.imm; break;
             }
-            oss << ", r" << (int)fields.rn;
+            oss << ", " << reg_name(fields.rn);
             break;
         }
 #endif
@@ -846,41 +872,41 @@ static std::string format_instruction(const InstructionFields& fields) {
             uint32_t lsb = fields.imm & 0xFF;        // bits [7:0]
             uint32_t msb = (fields.imm >> 8) & 0xFF; // bits [15:8]  
             uint32_t width = msb - lsb + 1;
-            oss << "bfi\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << lsb << ", #" << width;
+            oss << "bfi\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << lsb << ", #" << width;
             break;
         }
         case INST_T32_BFC: {
             uint32_t lsb = fields.imm & 0xFF;        // bits [7:0]
             uint32_t msb = (fields.imm >> 8) & 0xFF; // bits [15:8]
             uint32_t width = msb - lsb + 1;
-            oss << "bfc\tr" << (int)fields.rd << ", #" << lsb << ", #" << width;
+            oss << "bfc\t" << reg_name(fields.rd) << ", #" << lsb << ", #" << width;
             break;
         }
         case INST_T32_UBFX: {
             uint32_t lsb = fields.imm & 0xFF;         // bits [7:0]
             uint32_t width = (fields.imm >> 8) & 0xFF; // bits [15:8]
-            oss << "ubfx\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << lsb << ", #" << width;
+            oss << "ubfx\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << lsb << ", #" << width;
             break;
         }
         case INST_T32_SBFX: {
             uint32_t lsb = fields.imm & 0xFF;         // bits [7:0]
             uint32_t width = (fields.imm >> 8) & 0xFF; // bits [15:8]
-            oss << "sbfx\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << lsb << ", #" << width;
+            oss << "sbfx\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn) << ", #" << lsb << ", #" << width;
             break;
         }
         
         // Sign/Zero Extend Instructions
         case INST_T32_SXTH:
-            oss << "sxth.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            oss << "sxth.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn);
             break;
         case INST_T32_SXTB:
-            oss << "sxtb.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            oss << "sxtb.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn);
             break;
         case INST_T32_UXTH:
-            oss << "uxth.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            oss << "uxth.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn);
             break;
         case INST_T32_UXTB:
-            oss << "uxtb.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            oss << "uxtb.w\t" << reg_name(fields.rd) << ", " << reg_name(fields.rn);
             break;
 #endif
 
@@ -940,10 +966,10 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         // For 32-bit instructions, print as two 16-bit halfwords
         uint16_t first_half = (fields.opcode >> 16) & 0xFFFF;
         uint16_t second_half = fields.opcode & 0xFFFF;
-        ss << std::hex << first_half << " " << std::hex << second_half << ": ";
+        ss << std::hex << m_registers->get_pc()  << ":\t"<< std::hex << first_half << " " << std::hex << std::setw(4) << std::setfill('0') << second_half << "\t";
     } else {
         // For 16-bit instructions, print as single halfword
-        ss << std::hex << (fields.opcode & 0xFFFF) << ": ";
+        ss << std::hex << m_registers->get_pc()  << ":\t\t "<< std::hex << std::setw(4) << std::setfill('0') << (fields.opcode & 0xFFFF) << "\t";
     }
 
     // Log only when we're going to execute (or if IT not built)
@@ -997,10 +1023,10 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T16_ADD_HI:
         case INST_T16_CMP_HI:
         case INST_T16_MOV_HI:
-            pc_changed = execute_data_processing(fields);
-            break;
         case INST_T16_ADD_SP_IMM7:
         case INST_T16_SUB_SP_IMM7:
+        case INST_T16_ADD_PC:
+        case INST_T16_ADD_SP:
             pc_changed = execute_data_processing(fields);
             break;
         // Load/Store
@@ -1022,10 +1048,6 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T16_STR_SP:
         case INST_T16_LDR_SP:
             pc_changed = execute_load_store(fields, data_bus);
-            break;
-        case INST_T16_ADD_PC:
-        case INST_T16_ADD_SP:
-            pc_changed = execute_data_processing(fields);
             break;
         // Extend instructions
         case INST_T16_EXTEND:
@@ -1111,6 +1133,7 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_SUBW:
         case INST_T32_MOVW:
         case INST_T32_MOVT:
+        case INST_T32_ADR:
         case INST_T32_ADC_IMM:
         case INST_T32_SBC_IMM:
         case INST_T32_RSB_IMM:
@@ -1183,6 +1206,16 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_LDRB_PRE_POST:
         case INST_T32_LDRH_PRE_POST:
         case INST_T32_LDR_PC:
+        case INST_T32_LDR_LIT:
+        case INST_T32_LDR_REG:
+        case INST_T32_LDRB_REG:
+        case INST_T32_LDRH_REG:
+        case INST_T32_LDRSB_REG:
+        case INST_T32_LDRSH_REG:
+        case INST_T32_LDRT:
+        case INST_T32_STR_REG:
+        case INST_T32_STRB_REG:
+        case INST_T32_STRH_REG:
             pc_changed = execute_t32_load_store(fields, data_bus);
             break;
         case INST_T32_LDRD:
@@ -1225,7 +1258,7 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_UMULL:
         case INST_T32_SMULL:
         case INST_T32_UMLAL:
-        case INST_T32_SMLAL_:
+        case INST_T32_SMLAL:
             pc_changed = execute_long_multiply(fields);
             break;
 #endif
@@ -1298,7 +1331,7 @@ bool Execute::execute_branch(const InstructionFields& fields)
         
         // BX to EXC_RETURN magic value should perform an exception return
         if (m_cpu && m_cpu->try_exception_return(new_pc)) {
-            LOG_DEBUG("Exception return via BX R" + std::to_string(fields.rm));
+            LOG_DEBUG("Exception return via BX R" + reg_name(fields.rm));
             // Clear any active IT state on control-flow change
             m_registers->clear_it_state();
             return true; // PC updated by exception return
@@ -1317,7 +1350,7 @@ bool Execute::execute_branch(const InstructionFields& fields)
     } else if (fields.alu_op == 1) {
 #endif
         // BL instruction (Thumb): PC is current + 4; fields.imm is halfword offset
-        int32_t byte_off = static_cast<int32_t>(fields.imm) * 2;
+        int32_t byte_off = static_cast<int32_t>(fields.imm);
         new_pc = current_pc + 4 + byte_off;
 
         // Save return address in LR (Thumb bit set)
@@ -1354,216 +1387,364 @@ bool Execute::execute_branch(const InstructionFields& fields)
 
 bool Execute::execute_data_processing(const InstructionFields& fields)
 {
-    // Handle different data processing formats
     uint32_t result = 0;
     bool carry = false;
     bool overflow = false;
     uint32_t op1, op2;
     
-    // Get operands based on instruction format
-    if (fields.rm == 0xFF) {
-        // Immediate operand (Format 3: MOVS/CMP/ADDS/SUBS)
-        if ((fields.opcode & 0xE000) == 0x2000) {
-            uint32_t rn_val = m_registers->read_register(fields.rn);
-            switch (fields.alu_op) {
-                case 0: // MOVS
-                    m_registers->write_register(fields.rd, fields.imm);
-                    if (fields.s_bit) update_flags(fields.imm, false, false);
-                    return false;
-                case 1: { // CMP
-                    uint32_t res = rn_val - fields.imm;
-                    bool c = (rn_val >= fields.imm);
-                    bool v = ((rn_val ^ fields.imm) & (rn_val ^ res)) >> 31;
-                    update_flags(res, c, v);
-                    return false;
-                }
-                case 2: { // ADD
-                    uint32_t res = rn_val + fields.imm;
-                    bool c = (res < rn_val);
-                    bool v = ((rn_val ^ res) & (fields.imm ^ res)) >> 31;
-                    m_registers->write_register(fields.rd, res);
-                    if (fields.s_bit) update_flags(res, c, v);
-                    return false;
-                }
-                case 3: { // SUB
-                    uint32_t res = rn_val - fields.imm;
-                    bool c = (rn_val >= fields.imm);
-                    bool v = ((rn_val ^ fields.imm) & (rn_val ^ res)) >> 31;
-                    m_registers->write_register(fields.rd, res);
-                    if (fields.s_bit) update_flags(res, c, v);
-                    return false;
-                }
-            }
+    // Handle different instruction types
+    switch (fields.type) {
+        // T16 Immediate operations (Format 3)
+        case INST_T16_MOV_IMM: {
+            result = fields.imm;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, false, false);
+            return false;
         }
-        // Fallback: treat as op with immediate
-        op1 = m_registers->read_register(fields.rn);
-        op2 = fields.imm;
-    } else if ((fields.opcode & 0xFC00) == 0x4400) {
-        // Hi register operations (Format 5): ADD/CMP/MOV with high regs
-        uint32_t rd_val = m_registers->read_register(fields.rd);
-        uint32_t rm_val = m_registers->read_register(fields.rm);
-        switch (fields.alu_op & 0x3) {
-            case 0: { // ADD (hi)
-                uint32_t res = rd_val + rm_val;
-                m_registers->write_register(fields.rd, res);
-                // Flags are not affected by ADD (hi)
-                return false;
-            }
-            case 1: { // CMP (hi)
-                uint32_t res = rd_val - rm_val;
-                bool c = (rd_val >= rm_val);
-                bool v = ((rd_val ^ rm_val) & (rd_val ^ res)) >> 31;
-                update_flags(res, c, v);
-                return false;
-            }
-            case 2: { // MOV (hi)
-                m_registers->write_register(fields.rd, rm_val);
-                // Flags not affected
-                return false;
-            }
-            case 3: {
-                // BX/BLX handled in execute_branch via instruction type
-                return false;
-            }
-        }
-    } else if ((fields.opcode & 0xF000) == 0xA000) {
-        // Load address (Format 12) - ADD PC/SP + immediate
-        if (fields.rn == 15) {
-            // PC-relative: align PC to word boundary
-            op1 = (m_registers->get_pc() + 4) & ~3;
-        } else {
+        case INST_T16_CMP_IMM: {
             op1 = m_registers->read_register(fields.rn);
+            result = op1 - fields.imm;
+            carry = (op1 >= fields.imm);
+            overflow = ((op1 ^ fields.imm) & (op1 ^ result)) >> 31;
+            update_flags(result, carry, overflow);
+            return false;
         }
-        op2 = fields.imm;
-        result = op1 + op2;
-        m_registers->write_register(fields.rd, result);
-        return false;
-    } else if ((fields.opcode & 0xE000) == 0x0000 && (fields.opcode & 0x1800) != 0x1800) {
-        // Shifted register operations (Format 1)
-        op2 = m_registers->read_register(fields.rm);
-        
-        // Apply shift
-        switch (fields.shift_type) {
-            case 0: // LSL
-                if (fields.shift_amount == 0) {
-                    result = op2;
-                } else {
-                    carry = (op2 >> (32 - fields.shift_amount)) & 1;
-                    result = op2 << fields.shift_amount;
-                }
-                break;
-            case 1: // LSR
-                {
-                    uint32_t shift_amt = fields.shift_amount;
-                    if (shift_amt == 0) shift_amt = 32;
-                    carry = (op2 >> (shift_amt - 1)) & 1;
-                    result = op2 >> shift_amt;
-                }
-                break;
-            case 2: // ASR
-                {
-                    uint32_t shift_amt = fields.shift_amount;
-                    if (shift_amt == 0) shift_amt = 32;
-                    carry = (op2 >> (shift_amt - 1)) & 1;
-                    result = static_cast<int32_t>(op2) >> shift_amt;
-                }
-                break;
-            default:
-                result = op2;
-                break;
+        case INST_T16_ADD_IMM8: {
+            op1 = m_registers->read_register(fields.rn);
+            result = op1 + fields.imm;
+            carry = (result < op1);
+            overflow = ((op1 ^ result) & (fields.imm ^ result)) >> 31;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_SUB_IMM8: {
+            op1 = m_registers->read_register(fields.rn);
+            result = op1 - fields.imm;
+            carry = (op1 >= fields.imm);
+            overflow = ((op1 ^ fields.imm) & (op1 ^ result)) >> 31;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
         }
         
-        m_registers->write_register(fields.rd, result);
-        update_flags(result, carry, overflow);
-        return false;
-    } else {
-        // Regular ALU operations
-        op1 = m_registers->read_register(fields.rn);
-        op2 = m_registers->read_register(fields.rm);
-    }
-
-    // Handle ADD/SUB SP, #imm7 special (Format 13)
-    if (fields.type == INST_T16_ADD_SP_IMM7 || fields.type == INST_T16_SUB_SP_IMM7) {
-        uint32_t sp = m_registers->read_register(13);
-        uint32_t res = (fields.type == INST_T16_ADD_SP_IMM7) ? (sp + fields.imm) : (sp - fields.imm);
-        m_registers->write_register(13, res);
-        LOG_DEBUG(std::string((fields.type == INST_T16_ADD_SP_IMM7) ? "ADD SP, #" : "SUB SP, #") + std::to_string(fields.imm) + " -> SP=" + hex32(res));
-        return false;
-    }
-    
-    // Determine operation based on ALU op code
-    switch (fields.alu_op) {
-        case 0: // AND (Format 4)
-            result = op1 & op2;
-            break;
-        case 1: // ADD
+        // T16 3-operand operations (Format 2)
+        case INST_T16_ADD_REG: {
+            op1 = m_registers->read_register(fields.rn);
+            op2 = m_registers->read_register(fields.rm);
             result = op1 + op2;
-            carry = (result < op1); // Detect carry
-            overflow = ((op1 ^ result) & (op2 ^ result)) >> 31; // Detect overflow
-            break;
-        case 2: // SUB
+            carry = (result < op1);
+            overflow = ((op1 ^ result) & (op2 ^ result)) >> 31;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_SUB_REG: {
+            op1 = m_registers->read_register(fields.rn);
+            op2 = m_registers->read_register(fields.rm);
             result = op1 - op2;
-            carry = (op1 >= op2); // Borrow is inverse of carry
+            carry = (op1 >= op2);
             overflow = ((op1 ^ op2) & (op1 ^ result)) >> 31;
-            break;
-        case 3: // CMP (Format 3) or EOR (Format 4)
-            if ((fields.opcode & 0xE000) == 0x2000) {
-                result = op1 - op2; // CMP
-                carry = (op1 >= op2);
-                overflow = ((op1 ^ op2) & (op1 ^ result)) >> 31;
-                update_flags(result, carry, overflow);
-                return false; // No writeback for CMP
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_ADD_IMM3: {
+            op1 = m_registers->read_register(fields.rn);
+            result = op1 + fields.imm;
+            carry = (result < op1);
+            overflow = ((op1 ^ result) & (fields.imm ^ result)) >> 31;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_SUB_IMM3: {
+            op1 = m_registers->read_register(fields.rn);
+            result = op1 - fields.imm;
+            carry = (op1 >= fields.imm);
+            overflow = ((op1 ^ fields.imm) & (op1 ^ result)) >> 31;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        
+        // T16 Register operations (Format 4)
+        case INST_T16_AND: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
+            result = op1 & op2;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, false, false);
+            return false;
+        }
+        case INST_T16_EOR: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
+            result = op1 ^ op2;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, false, false);
+            return false;
+        }
+        case INST_T16_LSL_REG: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm) & 0xFF;
+            if (op2 == 0) {
+                result = op1;
+                carry = false;
+            } else if (op2 < 32) {
+                carry = (op1 >> (32 - op2)) & 1;
+                result = op1 << op2;
+            } else if (op2 == 32) {
+                carry = op1 & 1;
+                result = 0;
             } else {
-                result = op1 ^ op2; // EOR
+                carry = false;
+                result = 0;
             }
-            break;
-        case 4: // LSL (Format 4)
-            carry = op1 >> (32 - (op2 & 0xFF));
-            result = op1 << (op2 & 0xFF);
-            break;
-        case 5: // LSR (Format 4)
-            carry = op1 >> ((op2 & 0xFF) - 1);
-            result = op1 >> (op2 & 0xFF);
-            break;
-        case 6: // ASR (Format 4)
-            carry = static_cast<int32_t>(op1) >> ((op2 & 0xFF) - 1);
-            result = static_cast<int32_t>(op1) >> (op2 & 0xFF);
-            break;
-        case 8: // TST (Format 4)
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, false);
+            return false;
+        }
+        case INST_T16_LSR_REG: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm) & 0xFF;
+            if (op2 == 0) {
+                result = op1;
+                carry = false;
+            } else if (op2 < 32) {
+                carry = (op1 >> (op2 - 1)) & 1;
+                result = op1 >> op2;
+            } else if (op2 == 32) {
+                carry = (op1 >> 31) & 1;
+                result = 0;
+            } else {
+                carry = false;
+                result = 0;
+            }
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, false);
+            return false;
+        }
+        case INST_T16_ASR_REG: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm) & 0xFF;
+            if (op2 == 0) {
+                result = op1;
+                carry = false;
+            } else if (op2 < 32) {
+                carry = (static_cast<int32_t>(op1) >> (op2 - 1)) & 1;
+                result = static_cast<int32_t>(op1) >> op2;
+            } else {
+                carry = (static_cast<int32_t>(op1) >> 31) & 1;
+                result = static_cast<int32_t>(op1) >> 31;
+            }
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, false);
+            return false;
+        }
+        case INST_T16_ADC: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
+            uint32_t c_in = m_registers->get_c_flag() ? 1 : 0;
+            result = op1 + op2 + c_in;
+            carry = (result < op1) || (result == op1 && c_in);
+            overflow = ((op1 ^ result) & (op2 ^ result)) >> 31;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_SBC: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
+            uint32_t c_in = m_registers->get_c_flag() ? 1 : 0;
+            result = op1 - op2 - (1 - c_in);
+            carry = (op1 >= op2) && (op1 >= (op2 + (1 - c_in)));
+            overflow = ((op1 ^ op2) & (op1 ^ result)) >> 31;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_ROR: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm) & 0xFF;
+            if (op2 == 0) {
+                result = op1;
+                carry = false;
+            } else {
+                op2 = op2 & 0x1F; // Only bottom 5 bits matter for 32-bit rotate
+                if (op2 == 0) {
+                    result = op1;
+                    carry = (op1 >> 31) & 1;
+                } else {
+                    result = (op1 >> op2) | (op1 << (32 - op2));
+                    carry = (result >> 31) & 1;
+                }
+            }
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, false);
+            return false;
+        }
+        case INST_T16_TST: {
+            op1 = m_registers->read_register(fields.rn);
+            op2 = m_registers->read_register(fields.rm);
             result = op1 & op2;
             update_flags(result, false, false);
-            return false; // No writeback
-        case 9: // NEG (Format 4)
+            return false;
+        }
+        case INST_T16_NEG: {
+            op2 = m_registers->read_register(fields.rm);
             result = 0 - op2;
-            break;
-        case 10: // CMP (Format 4)
+            carry = (op2 == 0);
+            overflow = (op2 == 0x80000000);
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_CMP_REG: {
+            op1 = m_registers->read_register(fields.rn);
+            op2 = m_registers->read_register(fields.rm);
             result = op1 - op2;
             carry = (op1 >= op2);
             overflow = ((op1 ^ op2) & (op1 ^ result)) >> 31;
             update_flags(result, carry, overflow);
-            return false; // No writeback
-        case 12: // ORR (Format 4)
+            return false;
+        }
+        case INST_T16_CMN: {
+            op1 = m_registers->read_register(fields.rn);
+            op2 = m_registers->read_register(fields.rm);
+            result = op1 + op2;
+            carry = (result < op1);
+            overflow = ((op1 ^ result) & (op2 ^ result)) >> 31;
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_ORR: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
             result = op1 | op2;
-            break;
-        case 13: // MUL (Format 4)
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, false, false);
+            return false;
+        }
+        case INST_T16_MUL: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
             result = op1 * op2;
-            break;
-        case 14: // BIC (Format 4)
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, false, false);
+            return false;
+        }
+        case INST_T16_BIC: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
             result = op1 & (~op2);
-            break;
-        case 15: // MVN (Format 4)
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, false, false);
+            return false;
+        }
+        case INST_T16_MVN: {
+            op2 = m_registers->read_register(fields.rm);
             result = ~op2;
-            break;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, false, false);
+            return false;
+        }
+        
+        // T16 Hi register operations (Format 5)
+        case INST_T16_ADD_HI: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
+            result = op1 + op2;
+            m_registers->write_register(fields.rd, result);
+            // Flags are not affected by ADD (hi)
+            return false;
+        }
+        case INST_T16_CMP_HI: {
+            op1 = m_registers->read_register(fields.rd);
+            op2 = m_registers->read_register(fields.rm);
+            result = op1 - op2;
+            carry = (op1 >= op2);
+            overflow = ((op1 ^ op2) & (op1 ^ result)) >> 31;
+            update_flags(result, carry, overflow);
+            return false;
+        }
+        case INST_T16_MOV_HI: {
+            op2 = m_registers->read_register(fields.rm);
+            m_registers->write_register(fields.rd, op2);
+            // Flags not affected
+            return false;
+        }
+        
+        // T16 Shift immediate operations (Format 1)
+        case INST_T16_LSL_IMM: {
+            op2 = m_registers->read_register(fields.rm);
+            if (fields.shift_amount == 0) {
+                result = op2;
+                carry = false;
+            } else {
+                carry = (op2 >> (32 - fields.shift_amount)) & 1;
+                result = op2 << fields.shift_amount;
+            }
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, false);
+            return false;
+        }
+        case INST_T16_LSR_IMM: {
+            op2 = m_registers->read_register(fields.rm);
+            uint32_t shift_amt = fields.shift_amount;
+            if (shift_amt == 0) shift_amt = 32;
+            carry = (op2 >> (shift_amt - 1)) & 1;
+            result = op2 >> shift_amt;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, false);
+            return false;
+        }
+        case INST_T16_ASR_IMM: {
+            op2 = m_registers->read_register(fields.rm);
+            uint32_t shift_amt = fields.shift_amount;
+            if (shift_amt == 0) shift_amt = 32;
+            carry = (static_cast<int32_t>(op2) >> (shift_amt - 1)) & 1;
+            result = static_cast<int32_t>(op2) >> shift_amt;
+            m_registers->write_register(fields.rd, result);
+            update_flags(result, carry, false);
+            return false;
+        }
+        
+        // T16 Address generation (Format 12)
+        case INST_T16_ADD_PC: {
+            uint32_t current_pc = m_registers->get_pc();
+            op1 = (current_pc + 4) & ~3;  // PC-relative: align PC to word boundary
+            result = op1 + fields.imm;
+            m_registers->write_register(fields.rd, result);
+            return false;
+        }
+        case INST_T16_ADD_SP: {
+            op1 = m_registers->read_register(13); // SP
+            result = op1 + fields.imm;
+            m_registers->write_register(fields.rd, result);
+            return false;
+        }
+        
+        // T16 SP operations (Format 13)
+        case INST_T16_ADD_SP_IMM7: {
+            uint32_t sp = m_registers->read_register(13);
+            result = sp + fields.imm;
+            m_registers->write_register(13, result);
+            //LOG_DEBUG("ADD SP, #" + std::to_string(fields.imm) + " -> SP=" + hex32(result));
+            return false;
+        }
+        case INST_T16_SUB_SP_IMM7: {
+            uint32_t sp = m_registers->read_register(13);
+            result = sp - fields.imm;
+            m_registers->write_register(13, result);
+            //LOG_DEBUG("SUB SP, #" + std::to_string(fields.imm) + " -> SP=" + hex32(result));
+            return false;
+        }
+        
         default:
-            result = op2; // Default MOV
-            break;
-    }
-    
-    // Writeback result and update flags
-    m_registers->write_register(fields.rd, result);
-    
-    if (fields.s_bit || (fields.opcode & 0xFC00) == 0x4000) {
-        update_flags(result, carry, overflow);
+            // Unknown instruction type for data processing
+            LOG_WARNING("Unknown data processing instruction type: " + std::to_string(fields.type));
+            return false;
     }
     
     return false;
@@ -1629,7 +1810,7 @@ bool Execute::execute_load_store(const InstructionFields& fields, void* data_bus
         }
         
     m_registers->write_register(fields.rd, data);
-    LOG_DEBUG("Load: R" + std::to_string(fields.rd) + " = [" + hex32(address) + "] = " + hex32(data));
+    LOG_DEBUG("Load: " + reg_name(fields.rd) + " = [" + hex32(address) + "] = " + hex32(data));
     } else {
         // Store operation
         data = m_registers->read_register(fields.rd);
@@ -1652,7 +1833,7 @@ bool Execute::execute_load_store(const InstructionFields& fields, void* data_bus
             data &= 0xFFFF;
         }
         
-    LOG_DEBUG("Store: [" + hex32(address) + "] = R" + std::to_string(fields.rd) + " = " + hex32(data));
+    LOG_DEBUG("Store: [" + hex32(address) + "] = " + reg_name(fields.rd) + " = " + hex32(data));
     write_memory(address, data, size, data_bus);
     }
     
@@ -2065,7 +2246,7 @@ bool Execute::execute_extend(const InstructionFields& fields)
                 break;
         }
         
-        LOG_DEBUG("Extend: R" + std::to_string(fields.rd) + " = extend(R" + std::to_string(fields.rm) + 
+        LOG_DEBUG("Extend: " + reg_name(fields.rd) + " = extend(R" + reg_name(fields.rm) + 
                   ") = " + hex32(result));
     }
     
@@ -2125,13 +2306,11 @@ bool Execute::execute_cps(const InstructionFields& fields)
         if (fields.alu_op == 1) {
             // CPSID I - disable interrupts (set PRIMASK = 1)
             m_registers->disable_interrupts();
-            LOG_DEBUG("CPSID I - Interrupts disabled (PRIMASK = 1)");
         } else {
             // CPSIE I - enable interrupts (set PRIMASK = 0) 
             m_registers->enable_interrupts();
-            LOG_DEBUG("CPSIE I - Interrupts enabled (PRIMASK = 0)");
         }
-        
+
         // Log the current PRIMASK value for confirmation
         uint32_t primask = m_registers->get_primask();
         LOG_DEBUG(operation + " I completed - PRIMASK = " + std::to_string(primask));
@@ -2154,17 +2333,11 @@ bool Execute::execute_msr(const InstructionFields& fields)
         case 0x09: // PSP (Process Stack Pointer)
             reg_name = "PSP";
             m_registers->set_psp(source_value);
-            LOG_DEBUG("MSR PSP, R" + std::to_string(fields.rn) + " = " + hex32(source_value));
             break;
             
         case 0x14: // CONTROL 
             reg_name = "CONTROL";
             m_registers->set_control(source_value);
-            // Bit 0: Thread mode privilege level (0=privileged, 1=unprivileged)  
-            // Bit 1: Thread mode stack selection (0=MSP, 1=PSP)
-            LOG_DEBUG("MSR CONTROL, R" + std::to_string(fields.rn) + " = " + hex32(source_value) + 
-                     " (SPSEL=" + std::to_string((source_value >> 1) & 1) + 
-                     ", nPRIV=" + std::to_string(source_value & 1) + ")");
             break;
             
         case 0x00: // APSR (Application Program Status Register)
@@ -2174,8 +2347,6 @@ bool Execute::execute_msr(const InstructionFields& fields)
                 uint32_t current_psr = m_registers->get_psr();
                 uint32_t new_psr = (current_psr & ~0xF0000000) | (source_value & 0xF0000000);
                 m_registers->set_psr(new_psr);
-                LOG_DEBUG("MSR APSR, R" + std::to_string(fields.rn) + " = " + hex32(source_value) +
-                         " (flags only)");
                 break;
             }
             
@@ -2184,22 +2355,18 @@ bool Execute::execute_msr(const InstructionFields& fields)
                 reg_name = "PRIMASK";
                 m_registers->set_primask(source_value);
                 bool interrupts_enabled = m_registers->interrupts_enabled();
-                LOG_DEBUG("MSR PRIMASK, R" + std::to_string(fields.rn) + " = " + hex32(source_value) +
-                         " (interrupts " + (interrupts_enabled ? "enabled" : "disabled") + ")");
                 break;
             }
         case 0x08: // MSP
             {
                 reg_name = "MSP";
                 m_registers->set_msp(source_value);
-                LOG_DEBUG("MSR MSP, R" + std::to_string(fields.rn) + " = " + hex32(source_value));
                 break;
             }
         case 0x11: // BASEPRI
             {
                 reg_name = "BASEPRI";
                 m_registers->set_basepri(source_value);
-                LOG_DEBUG("MSR BASEPRI, R" + std::to_string(fields.rn) + " = " + hex32(source_value));
                 break;
             }
         case 0x12: // BASEPRI_MAX
@@ -2209,11 +2376,6 @@ bool Execute::execute_msr(const InstructionFields& fields)
                 uint32_t current_basepri = m_registers->get_basepri();
                 if (source_value != 0 && (current_basepri == 0 || source_value < current_basepri)) {
                     m_registers->set_basepri(source_value);
-                    LOG_DEBUG("MSR BASEPRI_MAX, R" + std::to_string(fields.rn) + " = " + hex32(source_value) + 
-                             " (updated from " + hex32(current_basepri) + ")");
-                } else {
-                    LOG_DEBUG("MSR BASEPRI_MAX, R" + std::to_string(fields.rn) + " = " + hex32(source_value) + 
-                             " (no change, current=" + hex32(current_basepri) + ")");
                 }
                 break;
             }
@@ -2221,7 +2383,6 @@ bool Execute::execute_msr(const InstructionFields& fields)
             {
                 reg_name = "FAULTMASK";
                 m_registers->set_faultmask(source_value);
-                LOG_DEBUG("MSR FAULTMASK, R" + std::to_string(fields.rn) + " = " + hex32(source_value));
                 break;
             }
         default:
@@ -2283,14 +2444,14 @@ bool Execute::execute_mrs(const InstructionFields& fields)
             
         default:
             reg_name = "UNKNOWN(" + std::to_string(spec_reg) + ")";
-            LOG_WARNING("MRS from unknown special register: " + std::to_string(spec_reg));
+            LOG_WARNING("mrs from unknown special register: " + std::to_string(spec_reg));
             value = 0;
             break;
     }
     
     m_registers->write_register(fields.rd, value);
-    LOG_DEBUG("MRS R" + std::to_string(fields.rd) + ", " + reg_name + " = " + hex32(value));
-    
+    //LOG_DEBUG("mrs r" + std::to_string(fields.rd) + ", " + reg_name + " = " + hex32(value));
+
     return false;
 }
 
@@ -2485,19 +2646,19 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
     switch (fields.type) {
         case INST_T32_MOV_IMM:
             result = operand2;
-            LOG_DEBUG("MOV.W r" + std::to_string(fields.rd) + ", #" + hex32(operand2) + 
+            LOG_DEBUG("MOV.W " + reg_name(fields.rd) + ", #" + hex32(operand2) + 
                      " -> " + hex32(result));
             break;
             
         case INST_T32_MOVS_IMM:
             result = operand2;
-            LOG_DEBUG("MOVS.W r" + std::to_string(fields.rd) + ", #" + hex32(operand2) + 
+            LOG_DEBUG("MOVS.W " + reg_name(fields.rd) + ", #" + hex32(operand2) + 
                      " -> " + hex32(result));
             break;
             
         case INST_T32_MVN_IMM:
             result = ~operand2;
-            LOG_DEBUG("MVN.W r" + std::to_string(fields.rd) + ", #" + hex32(operand2) + 
+            LOG_DEBUG("MVN.W " + reg_name(fields.rd) + ", #" + hex32(operand2) + 
                      " -> " + hex32(result));
             break;
             
@@ -2505,7 +2666,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 + operand2;
             carry = result < operand1;  // Carry on unsigned overflow
             overflow = ((operand1 ^ result) & (operand2 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("ADD.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("ADD.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
             
@@ -2513,30 +2674,30 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 - operand2;
             carry = operand1 >= operand2;  // No borrow
             overflow = ((operand1 ^ operand2) & (operand1 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("SUB.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("SUB.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
 
         case INST_T32_ADDW:
             result = operand1 + operand2;
             // ADDW doesn't set flags, so no carry/overflow calculation needed
-            LOG_DEBUG("ADDW r" + std::to_string(fields.rd) + ", " + 
-                     (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) + 
+            LOG_DEBUG("ADDW " + reg_name(fields.rd) + ", " + 
+                     (fields.rn == 15 ? "pc" : "r" + reg_name(fields.rn)) + 
                      ", #" + std::to_string(operand2) + " -> " + hex32(result));
             break;
             
         case INST_T32_SUBW:
             result = operand1 - operand2;
             // SUBW doesn't set flags, so no carry/overflow calculation needed
-            LOG_DEBUG("SUBW r" + std::to_string(fields.rd) + ", " + 
-                     (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) + 
+            LOG_DEBUG("SUBW " + reg_name(fields.rd) + ", " + 
+                     (fields.rn == 15 ? "pc" : "r" + reg_name(fields.rn)) + 
                      ", #" + std::to_string(operand2) + " -> " + hex32(result));
             break;
 
         case INST_T32_MOVW:
             result = fields.imm; // MOVW just moves the 16-bit immediate to the register
             // MOVW doesn't set flags
-            LOG_DEBUG("MOVW r" + std::to_string(fields.rd) + ", #" + std::to_string(fields.imm) + 
+            LOG_DEBUG("MOVW " + reg_name(fields.rd) + ", #" + std::to_string(fields.imm) + 
                      " -> " + hex32(result));
             break;
             
@@ -2544,7 +2705,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             // MOVT moves the 16-bit immediate to upper 16 bits, preserving lower 16 bits
             result = (operand1 & 0xFFFF) | (fields.imm << 16);
             // MOVT doesn't set flags
-            LOG_DEBUG("MOVT r" + std::to_string(fields.rd) + ", #" + std::to_string(fields.imm) + 
+            LOG_DEBUG("MOVT " + reg_name(fields.rd) + ", #" + std::to_string(fields.imm) + 
                      " -> " + hex32(result));
             break;
 
@@ -2554,7 +2715,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 + operand2 + carry_in;
             carry = (result < operand1) || (carry_in && result == operand1);
             overflow = ((operand1 ^ result) & (operand2 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("ADC.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("ADC.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
         }
@@ -2565,7 +2726,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 - operand2 - (1 - carry_in);
             carry = (operand1 >= operand2) && (carry_in || operand1 > operand2);
             overflow = ((operand1 ^ operand2) & (operand1 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("SBC.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("SBC.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
         }
@@ -2574,31 +2735,31 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand2 - operand1;
             carry = operand2 >= operand1;
             overflow = ((operand2 ^ operand1) & (operand2 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("RSB.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("RSB.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
             
         case INST_T32_AND_IMM:
             result = operand1 & operand2;
-            LOG_DEBUG("AND.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("AND.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
             
         case INST_T32_ORR_IMM:
             result = operand1 | operand2;
-            LOG_DEBUG("ORR.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("ORR.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
             
         case INST_T32_EOR_IMM:
             result = operand1 ^ operand2;
-            LOG_DEBUG("EOR.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("EOR.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
             
         case INST_T32_BIC_IMM:
             result = operand1 & (~operand2);
-            LOG_DEBUG("BIC.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+            LOG_DEBUG("BIC.W " + reg_name(fields.rd) + ", " + reg_name(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
             break;
             
@@ -2607,7 +2768,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 - operand2;
             carry = operand1 >= operand2;
             overflow = ((operand1 ^ operand2) & (operand1 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("CMP.W r" + std::to_string(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("CMP.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, carry, overflow);
             return false;
             
@@ -2615,19 +2776,19 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 + operand2;
             carry = result < operand1;
             overflow = ((operand1 ^ result) & (operand2 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("CMN.W r" + std::to_string(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("CMN.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, carry, overflow);
             return false;
             
         case INST_T32_TST_IMM:
             result = operand1 & operand2;
-            LOG_DEBUG("TST.W r" + std::to_string(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("TST.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, false, false);
             return false;
             
         case INST_T32_TEQ_IMM:
             result = operand1 ^ operand2;
-            LOG_DEBUG("TEQ.W r" + std::to_string(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("TEQ.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, false, false);
             return false;
 
@@ -2638,8 +2799,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 & operand2_shifted;
             bool set_flags = (fields.type == INST_T32_ANDS_REG);
-            LOG_DEBUG("AND.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("AND.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rn) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, false, false);
@@ -2653,8 +2814,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 | operand2_shifted;
             bool set_flags = (fields.type == INST_T32_ORRS_REG);
-            LOG_DEBUG("ORR.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("ORR.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rn) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, false, false);
@@ -2668,8 +2829,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 ^ operand2_shifted;
             bool set_flags = (fields.type == INST_T32_EORS_REG);
-            LOG_DEBUG("EOR.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("EOR.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rn) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, false, false);
@@ -2683,8 +2844,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 & (~operand2_shifted);
             bool set_flags = (fields.type == INST_T32_BICS_REG);
-            LOG_DEBUG("BIC.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("BIC.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rn) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, false, false);
@@ -2700,8 +2861,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             carry = result < operand1;
             overflow = ((operand1 ^ result) & (operand2_shifted ^ result) & 0x80000000) != 0;
             bool set_flags = (fields.type == INST_T32_ADDS_REG);
-            LOG_DEBUG("ADD.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("ADD.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rn) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, carry, overflow);
@@ -2717,8 +2878,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             carry = operand1 >= operand2_shifted;
             overflow = ((operand1 ^ operand2_shifted) & (operand1 ^ result) & 0x80000000) != 0;
             bool set_flags = (fields.type == INST_T32_SUBS_REG);
-            LOG_DEBUG("SUB.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("SUB.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rn) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, carry, overflow);
@@ -2733,8 +2894,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
                                                    fields.shift_type, fields.shift_amount);
             result = operand2_shifted;
             bool set_flags = (fields.type == INST_T32_MOVS_REG);
-            LOG_DEBUG("MOV.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("MOV.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, false, false);
@@ -2748,8 +2909,8 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
                                                    fields.shift_type, fields.shift_amount);
             result = ~operand2_shifted;
             bool set_flags = (fields.type == INST_T32_MVNS_REG);
-            LOG_DEBUG("MVN.W r" + std::to_string(fields.rd) + 
-                     ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("MVN.W " + reg_name(fields.rd) + 
+                     ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result));
             if (set_flags) {
                 update_flags(result, false, false);
@@ -2762,7 +2923,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 & operand2_shifted;
-            LOG_DEBUG("TST.W r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm));
+            LOG_DEBUG("TST.W r" + reg_name(fields.rn) + ", " + reg_name(fields.rm));
             update_flags(result, false, false);
             return false;
         }
@@ -2773,7 +2934,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 - operand2_shifted;
             carry = operand1 >= operand2_shifted;
             overflow = ((operand1 ^ operand2_shifted) & (operand1 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("CMP.W r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm));
+            LOG_DEBUG("CMP.W r" + reg_name(fields.rn) + ", " + reg_name(fields.rm));
             update_flags(result, carry, overflow);
             return false;
         }
@@ -2825,8 +2986,8 @@ bool Execute::execute_t32_shift_register(const InstructionFields& fields)
                 carry_out = false;
                 result = 0;
             }
-            LOG_DEBUG("LSL.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
-                     ", r" + std::to_string(fields.rn) + " (shift=" + std::to_string(rs_value) + 
+            LOG_DEBUG("LSL.W " + reg_name(fields.rd) + ", " + reg_name(fields.rm) + 
+                     ", " + reg_name(fields.rn) + " (shift=" + std::to_string(rs_value) + 
                      ") -> " + hex32(result));
             break;
             
@@ -2845,8 +3006,8 @@ bool Execute::execute_t32_shift_register(const InstructionFields& fields)
                 carry_out = false;
                 result = 0;
             }
-            LOG_DEBUG("LSR.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
-                     ", r" + std::to_string(fields.rn) + " (shift=" + std::to_string(rs_value) + 
+            LOG_DEBUG("LSR.W " + reg_name(fields.rd) + ", " + reg_name(fields.rm) + 
+                     ", " + reg_name(fields.rn) + " (shift=" + std::to_string(rs_value) + 
                      ") -> " + hex32(result));
             break;
             
@@ -2862,8 +3023,8 @@ bool Execute::execute_t32_shift_register(const InstructionFields& fields)
                 carry_out = (rm_value >> 31) & 1;
                 result = (rm_value & 0x80000000) ? 0xFFFFFFFF : 0;
             }
-            LOG_DEBUG("ASR.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
-                     ", r" + std::to_string(fields.rn) + " (shift=" + std::to_string(rs_value) + 
+            LOG_DEBUG("ASR.W " + reg_name(fields.rd) + ", " + reg_name(fields.rm) + 
+                     ", " + reg_name(fields.rn) + " (shift=" + std::to_string(rs_value) + 
                      ") -> " + hex32(result));
             break;
             
@@ -2882,8 +3043,8 @@ bool Execute::execute_t32_shift_register(const InstructionFields& fields)
                     carry_out = (result >> 31) & 1;
                 }
             }
-            LOG_DEBUG("ROR.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
-                     ", r" + std::to_string(fields.rn) + " (shift=" + std::to_string(rs_value) + 
+            LOG_DEBUG("ROR.W " + reg_name(fields.rd) + ", " + reg_name(fields.rm) + 
+                     ", " + reg_name(fields.rn) + " (shift=" + std::to_string(rs_value) + 
                      ") -> " + hex32(result));
             break;
             
@@ -2932,13 +3093,27 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
     }
     
     // Calculate address
-    if (fields.type == INST_T32_LDR_PC) {
+    if (fields.type == INST_T32_LDR_PC || fields.type == INST_T32_LDR_LIT) {
         // PC-relative addressing for T32 instructions
         // ARM specification: use (current instruction address + 4) as base
         uint32_t pc = m_registers->get_pc();
         uint32_t base_pc = pc + 4; // PC+4 for T32 instruction
         // Align to word boundary for PC-relative loads
         address = (base_pc & 0xFFFFFFFC) + fields.imm;
+    } else if (fields.type == INST_T32_LDR_REG || fields.type == INST_T32_STR_REG || 
+               fields.type == INST_T32_STRB_REG || fields.type == INST_T32_STRH_REG ||
+               fields.type == INST_T32_LDRB_REG || fields.type == INST_T32_LDRH_REG ||
+               fields.type == INST_T32_LDRSB_REG || fields.type == INST_T32_LDRSH_REG) {
+        // Register offset addressing: [Rn, Rm, LSL #shift]
+        uint32_t base_addr = m_registers->read_register(fields.rn);
+        uint32_t offset = m_registers->read_register(fields.rm);
+        
+        // Apply shift if present
+        if (fields.shift_amount > 0) {
+            offset = offset << fields.shift_amount;
+        }
+        
+        address = base_addr + offset;
     } else if (is_pre_post_indexed) {
         // Pre/post indexed addressing
         uint32_t base_addr = m_registers->read_register(fields.rn);
@@ -2965,28 +3140,38 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
     switch (fields.type) {
         case INST_T32_LDR_IMM:
         case INST_T32_LDR_PC:
+        case INST_T32_LDR_LIT:
+        case INST_T32_LDR_REG:
+        case INST_T32_LDRT:
         case INST_T32_STR_IMM:
+        case INST_T32_STR_REG:
         case INST_T32_LDR_PRE_POST:
         case INST_T32_STR_PRE_POST:
             size = 4; // Word
             break;
         case INST_T32_LDRH_IMM:
         case INST_T32_STRH_IMM:
+        case INST_T32_STRH_REG:
+        case INST_T32_LDRH_REG:
         case INST_T32_LDRH_PRE_POST:
         case INST_T32_STRH_PRE_POST:
             size = 2; // Halfword
             break;
         case INST_T32_LDRSH_IMM:
+        case INST_T32_LDRSH_REG:
             size = 2; // Signed halfword
             is_signed = true;
             break;
         case INST_T32_LDRB_IMM:
         case INST_T32_STRB_IMM:
+        case INST_T32_STRB_REG:
+        case INST_T32_LDRB_REG:
         case INST_T32_LDRB_PRE_POST:
         case INST_T32_STRB_PRE_POST:
             size = 1; // Byte
             break;
         case INST_T32_LDRSB_IMM:
+        case INST_T32_LDRSB_REG:
             size = 1; // Signed byte
             is_signed = true;
             break;
@@ -3034,21 +3219,34 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
         switch (fields.type) {
             case INST_T32_LDR_IMM: inst_name = "LDR.W"; break;
             case INST_T32_LDR_PC: inst_name = "LDR.W"; break;
+            case INST_T32_LDR_LIT: inst_name = "LDR.W"; break;
+            case INST_T32_LDR_REG: inst_name = "LDR.W"; break;
+            case INST_T32_LDRT: inst_name = "LDRT"; break;
             case INST_T32_LDRB_IMM: inst_name = "LDRB.W"; break;
+            case INST_T32_LDRB_REG: inst_name = "LDRB.W"; break;
             case INST_T32_LDRH_IMM: inst_name = "LDRH.W"; break;
+            case INST_T32_LDRH_REG: inst_name = "LDRH.W"; break;
             case INST_T32_LDRSB_IMM: inst_name = "LDRSB.W"; break;
+            case INST_T32_LDRSB_REG: inst_name = "LDRSB.W"; break;
             case INST_T32_LDRSH_IMM: inst_name = "LDRSH.W"; break;
+            case INST_T32_LDRSH_REG: inst_name = "LDRSH.W"; break;
             case INST_T32_LDR_PRE_POST: inst_name = "LDR.W"; break;
             case INST_T32_LDRB_PRE_POST: inst_name = "LDRB.W"; break;
             case INST_T32_LDRH_PRE_POST: inst_name = "LDRH.W"; break;
         }
         
-        if (fields.type == INST_T32_LDR_PC) {
-            LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [PC, #" + 
+        if (fields.type == INST_T32_LDR_PC || fields.type == INST_T32_LDR_LIT) {
+            LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [PC, #" + 
                      std::to_string((int32_t)fields.imm) + "] -> loaded 0x" + hex32(value) + 
                      " from 0x" + hex32(address));
+        } else if (fields.type == INST_T32_LDR_REG || fields.type == INST_T32_LDRB_REG || 
+                   fields.type == INST_T32_LDRH_REG || fields.type == INST_T32_LDRSB_REG || 
+                   fields.type == INST_T32_LDRSH_REG) {
+            LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [" + reg_name(fields.rn) + 
+                     ", " + reg_name(fields.rm) + "] -> loaded 0x" + hex32(value) + 
+                     " from 0x" + hex32(address));
         } else {
-            LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [r" + std::to_string(fields.rn) + 
+            LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [" + reg_name(fields.rn) + 
                      ", #" + std::to_string((int32_t)fields.imm) + "] -> loaded 0x" + hex32(value) + 
                      " from 0x" + hex32(address));
         }
@@ -3070,16 +3268,25 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
         std::string inst_name;
         switch (fields.type) {
             case INST_T32_STR_IMM: inst_name = "STR.W"; break;
+            case INST_T32_STR_REG: inst_name = "STR.W"; break;
             case INST_T32_STRB_IMM: inst_name = "STRB.W"; break;
+            case INST_T32_STRB_REG: inst_name = "STRB.W"; break;
             case INST_T32_STRH_IMM: inst_name = "STRH.W"; break;
+            case INST_T32_STRH_REG: inst_name = "STRH.W"; break;
             case INST_T32_STR_PRE_POST: inst_name = "STR.W"; break;
             case INST_T32_STRB_PRE_POST: inst_name = "STRB.W"; break;
             case INST_T32_STRH_PRE_POST: inst_name = "STRH.W"; break;
         }
         
-        LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [r" + std::to_string(fields.rn) + 
-                 ", #" + std::to_string((int32_t)fields.imm) + "] -> stored 0x" + hex32(value) + 
-                 " to 0x" + hex32(address));
+        if (fields.type == INST_T32_STR_REG || fields.type == INST_T32_STRB_REG || fields.type == INST_T32_STRH_REG) {
+            LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [" + reg_name(fields.rn) + 
+                     ", " + reg_name(fields.rm) + "] -> stored 0x" + hex32(value) + 
+                     " to 0x" + hex32(address));
+        } else {
+            LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [" + reg_name(fields.rn) + 
+                     ", #" + std::to_string((int32_t)fields.imm) + "] -> stored 0x" + hex32(value) + 
+                     " to 0x" + hex32(address));
+        }
     }
     
     // Handle writeback for pre/post indexed addressing
@@ -3096,7 +3303,7 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
             new_base = base_addr + signed_offset;
         }
         m_registers->write_register(fields.rn, new_base);
-        LOG_TRACE("[REG] WRITE R" + std::to_string(fields.rn) + " = 0x" + hex32(new_base) + " (writeback)");
+        LOG_TRACE("[REG] WRITE " + reg_name(fields.rn) + " = 0x" + hex32(new_base) + " (writeback)");
     }
     
     return false; // PC not changed for normal load/store
@@ -3256,8 +3463,8 @@ bool Execute::execute_mul(const InstructionFields& fields)
     
     m_registers->write_register(fields.rd, result);
     
-    LOG_DEBUG("MUL r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
-             ", r" + std::to_string(fields.rm) + 
+    LOG_DEBUG("MUL " + std::to_string(fields.rd) + ", " + reg_name(fields.rn) + 
+             ", " + reg_name(fields.rm) + 
              " -> " + std::to_string(multiplicand) + 
              " * " + std::to_string(multiplier) + " = " + std::to_string(result));
     
@@ -3278,8 +3485,8 @@ bool Execute::execute_mla(const InstructionFields& fields)
     
     m_registers->write_register(fields.rd, result);
     
-    LOG_DEBUG("MLA r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
-             ", r" + std::to_string(fields.rm) + ", r" + std::to_string(fields.rs) + 
+    LOG_DEBUG("MLA " + std::to_string(fields.rd) + ", " + reg_name(fields.rn) + 
+             ", " + reg_name(fields.rm) + ", " + std::to_string(fields.rs) + 
              " -> " + std::to_string(addend) + " + (" + std::to_string(multiplicand) + 
              " * " + std::to_string(multiplier) + ") = " + std::to_string(result));
     
@@ -3300,8 +3507,8 @@ bool Execute::execute_mls(const InstructionFields& fields)
     
     m_registers->write_register(fields.rd, result);
     
-    LOG_DEBUG("MLS r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
-             ", r" + std::to_string(fields.rm) + ", r" + std::to_string(fields.rs) + 
+    LOG_DEBUG("MLS " + std::to_string(fields.rd) + ", " + reg_name(fields.rn) + 
+             ", " + reg_name(fields.rm) + ", " + std::to_string(fields.rs) + 
              " -> " + std::to_string(addend) + " - (" + std::to_string(multiplicand) + 
              " * " + std::to_string(multiplier) + ") = " + std::to_string(result));
     
@@ -3337,7 +3544,7 @@ bool Execute::execute_long_multiply(const InstructionFields& fields)
             result64 = current_val + product;
             break;
         }
-        case INST_T32_SMLAL_: {
+        case INST_T32_SMLAL: {
             // SMLAL - Signed Multiply Accumulate Long: RdHi:RdLo += Rn * Rm (signed)
             uint32_t rdlo_current = m_registers->read_register(fields.rd);
             uint32_t rdhi_current = m_registers->read_register(fields.rs);
@@ -3359,10 +3566,10 @@ bool Execute::execute_long_multiply(const InstructionFields& fields)
     m_registers->write_register(fields.rd, rdlo);  // RdLo
     m_registers->write_register(fields.rs, rdhi);  // RdHi
     
-    LOG_DEBUG("Long multiply: r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rs) + 
-             ", r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm) + 
+    LOG_DEBUG("Long multiply: " + std::to_string(fields.rd) + ", " + std::to_string(fields.rs) + 
+             ", " + reg_name(fields.rn) + ", " + reg_name(fields.rm) + 
              " -> " + std::to_string(operand1) + " * " + std::to_string(operand2) + 
-             " = 0x" + hex32(rdhi) + hex32(rdlo));
+             " = " + hex32(rdhi) + " " +hex32(rdlo));
     
     return false;
 }
@@ -3522,7 +3729,7 @@ bool Execute::execute_bit_manipulation(const InstructionFields& fields)
                     mask >>= 1;
                 }
             }
-            LOG_DEBUG("CLZ r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("CLZ " + std::to_string(fields.rd) + ", " + reg_name(fields.rm) + 
                      " -> " + std::to_string(result) + " leading zeros in " + hex32(src_value));
             break;
         }
@@ -3535,7 +3742,7 @@ bool Execute::execute_bit_manipulation(const InstructionFields& fields)
                     result |= (1U << (31 - i));
                 }
             }
-            LOG_DEBUG("RBIT r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("RBIT " + std::to_string(fields.rd) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result) + " (bits reversed from " + hex32(src_value) + ")");
             break;
         }
@@ -3546,7 +3753,7 @@ bool Execute::execute_bit_manipulation(const InstructionFields& fields)
                     ((src_value & 0x00FF0000) >> 8) |
                     ((src_value & 0x0000FF00) << 8) |
                     ((src_value & 0x000000FF) << 24);
-            LOG_DEBUG("REV r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("REV " + std::to_string(fields.rd) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result) + " (bytes reversed from " + hex32(src_value) + ")");
             break;
         }
@@ -3557,7 +3764,7 @@ bool Execute::execute_bit_manipulation(const InstructionFields& fields)
                     ((src_value & 0x00FF0000) << 8) |
                     ((src_value & 0x0000FF00) >> 8) |
                     ((src_value & 0x000000FF) << 8);
-            LOG_DEBUG("REV16 r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("REV16 " + std::to_string(fields.rd) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result) + " (halfword bytes reversed from " + hex32(src_value) + ")");
             break;
         }
@@ -3567,7 +3774,7 @@ bool Execute::execute_bit_manipulation(const InstructionFields& fields)
             uint16_t lower_half = src_value & 0xFFFF;
             uint16_t reversed = ((lower_half & 0xFF00) >> 8) | ((lower_half & 0x00FF) << 8);
             result = (int32_t)(int16_t)reversed; // Sign extend to 32 bits
-            LOG_DEBUG("REVSH r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
+            LOG_DEBUG("REVSH " + std::to_string(fields.rd) + ", " + reg_name(fields.rm) + 
                      " -> " + hex32(result) + " (signed halfword bytes reversed from " + hex32(src_value) + ")");
             break;
         }
@@ -3611,8 +3818,8 @@ bool Execute::execute_t32_dual_load_store(const InstructionFields& fields, void*
         m_registers->write_register(fields.rd, data1);
         m_registers->write_register(fields.rm, data2);
         
-        LOG_DEBUG("LDRD r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
-                 ", [" + (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) + 
+        LOG_DEBUG("LDRD " + std::to_string(fields.rd) + ", " + reg_name(fields.rm) + 
+                 ", [" + (fields.rn == 15 ? "pc" : "" + reg_name(fields.rn)) + 
                  ", #" + std::to_string(fields.imm) + "] -> loaded " + hex32(data1) + 
                  ", " + hex32(data2) + " from " + hex32(address));
     } else {
@@ -3623,8 +3830,8 @@ bool Execute::execute_t32_dual_load_store(const InstructionFields& fields, void*
         write_memory(address, data1, 4, bus);
         write_memory(address + 4, data2, 4, bus);
         
-        LOG_DEBUG("STRD r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rm) + 
-                 ", [" + (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) + 
+        LOG_DEBUG("STRD " + std::to_string(fields.rd) + ", " + reg_name(fields.rm) + 
+                 ", [" + (fields.rn == 15 ? "pc" : "" + reg_name(fields.rn)) + 
                  ", #" + std::to_string(fields.imm) + "] -> stored " + hex32(data1) + 
                  ", " + hex32(data2) + " to " + hex32(address));
     }
@@ -3679,7 +3886,7 @@ bool Execute::execute_t32_multiple_load_store(const InstructionFields& fields, v
             }
         }
         /*
-        LOG_DEBUG("LDMIA/LDMDB r" + std::to_string(fields.rn) + 
+        LOG_DEBUG("LDMIA/LDMDB " + reg_name(fields.rn) + 
                  "!, " + format_reg_list(reg_list) + " from " + hex32(address) +
                  (treat_ldmdb_sp_as_ldmia ? " (LDMDB SP! treated as LDMIA)" : ""));
         */
@@ -3693,7 +3900,7 @@ bool Execute::execute_t32_multiple_load_store(const InstructionFields& fields, v
             }
         }
         /*
-        LOG_DEBUG("STMIA/STMDB r" + std::to_string(fields.rn) + 
+        LOG_DEBUG("STMIA/STMDB " + reg_name(fields.rn) + 
                  "!, " + format_reg_list(reg_list) + " to " + hex32(address));
         */
     }
