@@ -85,6 +85,7 @@ private:
 #endif
 #if HAS_HARDWARE_DIVIDE
     bool execute_divide(const InstructionFields& fields);
+    bool execute_mul(const InstructionFields& fields);
     bool execute_mla(const InstructionFields& fields);
     bool execute_mls(const InstructionFields& fields);
     bool execute_long_multiply(const InstructionFields& fields);

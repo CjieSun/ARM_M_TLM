@@ -10,30 +10,12 @@ Instruction::Instruction(sc_module_name name) : sc_module(name)
 
 InstructionFields Instruction::decode(uint32_t instruction, bool is_32bit)
 {
-    // Initialize all fields to known values
+    // Initialize all fields to zero/defaults
     InstructionFields fields = {};
-    fields.opcode = instruction;
-    fields.rd = 0xFF;   // Initialize to invalid register
-    fields.rn = 0xFF;   // Initialize to invalid register
-    fields.rm = 0xFF;   // Initialize to invalid register
-    fields.rs = 0xFF;   // Initialize to invalid register (not used marker)
-    fields.imm = 0;
-    fields.cond = 0;
-    fields.s_bit = false;
-    fields.shift_type = 0;
-    fields.shift_amount = 0;
-    fields.alu_op = 0;
-    fields.h1 = false;
-    fields.h2 = false;
-    fields.reg_list = 0;
-    fields.load_store_bit = false;
-    fields.byte_word = 0;
-    fields.is_32bit = is_32bit;
-    fields.type = INST_UNKNOWN;
-    
+
     if (is_32bit) {
         // Handle 32-bit Thumb instructions
-        fields = decode_thumb32_instruction(instruction);
+        fields = decode_thumb32_instruction(((instruction & 0xFFFF) << 16) | ((instruction >> 16) & 0xFFFF));
     } else {
         // Handle 16-bit Thumb instructions
         fields = decode_thumb16_instruction(instruction & 0xFFFF);
@@ -75,11 +57,8 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
     fields.rs = 0xFF;
     fields.s_bit = false;
     
-    // Extract opcode field (bits 15:10) for format identification
-    uint16_t opcode_field = (instruction >> 10) & 0x3F;
-    
-    // Format 1: Move shifted register (000000-000101, excluding 000110-000111)
-    if ((opcode_field & 0x38) == 0x00 && (opcode_field & 0x06) != 0x06) {
+    // Format 1: Move shifted register (000xxxxx xxxxxxxx, excluding 000110xx-000111xx)
+    if ((instruction & 0xE000) == 0x0000 && (instruction & 0x1800) != 0x1800) {
         fields.rd = instruction & 0x7;
         fields.rm = (instruction >> 3) & 0x7;
         fields.shift_amount = (instruction >> 6) & 0x1F;
@@ -92,11 +71,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         }
         return fields;
     }
-    
-    // ... existing code ...
-    
-    // Format 2: Add/subtract (000110, 000111)
-    if ((opcode_field & 0x3E) == 0x06) {
+
+    // Format 2: Add/subtract (000110xx xxxxxxxx, 000111xx xxxxxxxx)
+    if ((instruction & 0xF800) == 0x1800) {
         fields.rd = instruction & 0x7;
         fields.rn = (instruction >> 3) & 0x7;
         bool immediate_flag = (instruction & 0x0400) != 0;
@@ -134,9 +111,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         }
         return fields;
     }
-    
-    // Format 4: ALU operations (010000)
-    if (opcode_field == 0x10) {
+
+    // Format 4: ALU operations (010000xx xxxxxxxx)
+    if ((instruction & 0xFC00) == 0x4000) {
         fields.rd = instruction & 0x7;
         fields.rn = fields.rd;
         fields.rm = (instruction >> 3) & 0x7;
@@ -162,9 +139,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         fields.type = table[fields.alu_op & 0xF];
         return fields;
     }
-    
-    // Format 5: Hi register operations/branch exchange (010001)
-    if (opcode_field == 0x11) {
+
+    // Format 5: Hi register operations/branch exchange (010001xx xxxxxxxx)
+    if ((instruction & 0xFC00) == 0x4400) {
         fields.rd = instruction & 0x7;
         fields.rm = (instruction >> 3) & 0x7;
         fields.h1 = (instruction & 0x80) != 0;
@@ -193,9 +170,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         }
         return fields;
     }
-    
-    // Format 6: PC-relative load (01001x)
-    if ((opcode_field & 0x3E) == 0x12) {
+
+    // Format 6: PC-relative load (01001xxx xxxxxxxx)
+    if ((instruction & 0xF800) == 0x4800) {
         fields.rd = (instruction >> 8) & 0x7;
         fields.imm = (instruction & 0xFF) * 4;
         fields.rn = 15; // PC
@@ -205,12 +182,12 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         return fields;
     }
     
-    // Format 7: Load/store with register offset + sign-extended (0101xx)
-    if ((opcode_field & 0x3C) == 0x14) {
+    // Format 7: Load/store with register offset + sign-extended (0101xxxx xxxxxxxx)
+    if ((instruction & 0xF000) == 0x5000) {
         fields.rd = instruction & 0x7;
         fields.rn = (instruction >> 3) & 0x7;
         fields.rm = (instruction >> 6) & 0x7;
-        
+
         uint8_t op3 = (instruction >> 9) & 0x7;
         switch (op3) {
             case 0b000: // STR
@@ -243,9 +220,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         fields.type = map_t16_ls_reg[op3];
         return fields;
     }
-    
-    // Format 8: Load/store with immediate offset (011xxx)
-    if ((opcode_field & 0x38) == 0x18) {
+
+    // Format 8: Load/store with immediate offset (011xxxxx xxxxxxxx)
+    if ((instruction & 0xE000) == 0x6000) {
         fields.rd = instruction & 0x7;
         fields.rn = (instruction >> 3) & 0x7;
         fields.imm = (instruction >> 6) & 0x1F;
@@ -258,9 +235,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         else fields.type = INST_T16_LDRB_IMM;
         return fields;
     }
-    
-    // Format 9: Load/store halfword (1000xx)
-    if ((opcode_field & 0x3C) == 0x20) {
+
+    // Format 9: Load/store halfword (1000xxxx xxxxxxxx)
+    if ((instruction & 0xF000) == 0x8000) {
         fields.rd = instruction & 0x7;
         fields.rn = (instruction >> 3) & 0x7;
         fields.imm = ((instruction >> 6) & 0x1F) * 2;
@@ -269,9 +246,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         fields.type = fields.load_store_bit ? INST_T16_LDRH_IMM : INST_T16_STRH_IMM;
         return fields;
     }
-    
-    // Format 10: SP-relative load/store (1001xx)
-    if ((opcode_field & 0x3C) == 0x24) {
+
+    // Format 10: SP-relative load/store (1001xxxx xxxxxxxx)
+    if ((instruction & 0xF000) == 0x9000) {
         fields.rd = (instruction >> 8) & 0x7;
         fields.imm = (instruction & 0xFF) * 4;
         fields.rn = 13; // SP
@@ -280,9 +257,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         fields.type = fields.load_store_bit ? INST_T16_LDR_SP : INST_T16_STR_SP;
         return fields;
     }
-    
-    // Format 11: Load address (1010xx)
-    if ((opcode_field & 0x3C) == 0x28) {
+
+    // Format 11: Load address (1010xxxx xxxxxxxx)
+    if ((instruction & 0xF000) == 0xA000) {
         fields.rd = (instruction >> 8) & 0x7;
         fields.imm = (instruction & 0xFF) * 4;
         fields.rn = (instruction & 0x0800) ? 13 : 15; // SP or PC
@@ -310,9 +287,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         // (handled later in hint processing)
     }
 #endif
-    
-    // Format 12: Add offset to Stack Pointer and PUSH/POP (1011xxxx)
-    if ((opcode_field & 0x3C) == 0x2C) {
+
+    // Format 12: Add offset to Stack Pointer and PUSH/POP (1011xxxx xxxxxxxx)
+    if ((instruction & 0xF000) == 0xB000) {
 #if HAS_CBZ_CBNZ
         // First check for CBZ/CBNZ instructions (ARMv7-M) - Format: 1011xx1x xxxxxxxx
         // CBZ:  10110x01 xxxxxxxx (op=0)
@@ -330,7 +307,7 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
             return fields;
         }
 #endif
-        
+
         // Check for CPS (Change Processor State): 1011 0110 011x xxxx (0xB660-0xB67F)
         if ((instruction & 0xFFE0) == 0xB660) {
             fields.type = INST_T16_CPS;
@@ -356,7 +333,7 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
             }
             return fields;
         }
-        
+
         // Check for PUSH/POP: bits 11:9 should be x1xx (bit 9 = 1)
         if ((instruction & 0x0600) == 0x0400) {
             fields.reg_list = instruction & 0xFF;
@@ -379,18 +356,18 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         }
         return fields;
     }
-    
-    // Format 13: Multiple load/store (1100xx)
-    if ((opcode_field & 0x3C) == 0x30) {
+
+    // Format 13: Multiple load/store (1100xxxx xxxxxxxx)
+    if ((instruction & 0xF000) == 0xC000) {
         fields.rn = (instruction >> 8) & 0x7;
         fields.reg_list = instruction & 0xFF;
         fields.load_store_bit = (instruction & 0x0800) != 0;
         fields.type = fields.load_store_bit ? INST_T16_LDMIA : INST_T16_STMIA;
         return fields;
     }
-    
-    // Format 14: Conditional branch (1101xxxx, but not 11011111)
-    if ((opcode_field & 0x3C) == 0x34) {
+
+    // Format 14: Conditional branch (1101xxxx xxxxxxxx, but not 11011111 xxxxxxxx)
+    if ((instruction & 0xF000) == 0xD000) {
         // Software interrupt (11011111)
         if ((instruction & 0xFF00) == 0xDF00) {
             fields.type = INST_T16_SVC;
@@ -407,9 +384,9 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         fields.imm = (uint32_t)soff;
         return fields;
     }
-    
-    // Format 15: Unconditional branch (11100xxx)
-    if ((opcode_field & 0x38) == 0x38 && (opcode_field & 0x04) == 0x00) {
+
+    // Format 15: Unconditional branch (11100xxx xxxxxxxx)
+    if ((instruction & 0xF800) == 0xE000) {
         fields.type = INST_T16_B;
         fields.cond = 0xE; // Always
         // Compute 12-bit signed offset: imm11:1 sign-extended
@@ -419,26 +396,26 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
         fields.imm = (uint32_t)soff;
         return fields;
     }
-    
-    // Format 16: Long branch with link first half (1111xxxx)
-    if ((opcode_field & 0x3C) == 0x3C) {
+
+    // Format 16: Long branch with link first half (1111xxxx xxxxxxxx)
+    if ((instruction & 0xF000) == 0xF000) {
         fields.type = INST_T32_BL;
         fields.cond = 0xE;
         fields.alu_op = 1; // BL marker
         fields.imm = 0; // Will be fully decoded in decode_thumb32_instruction
         return fields;
     }
-    
+
     // BKPT instruction (10111110xxxxxxxx)
     if ((instruction & 0xFF00) == 0xBE00) {
         fields.type = INST_T16_BKPT;
         return fields;
     }
-    
+
     // HINT instructions (10111111xxxxxxxx) - NOP, WFI, WFE, etc.
     if ((instruction & 0xFF00) == 0xBF00) {
         uint32_t hint_op = instruction & 0xFF;
-        
+
 #if HAS_EXTENDED_HINTS
         // ARMv7-M extended hints
         switch (hint_op) {
@@ -454,1003 +431,15 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
 #endif
         return fields;
     }
-    
+
     // Unknown instruction
+    
+    // Default: UNKNOWN instruction
     fields.type = INST_UNKNOWN;
     return fields;
-}
-
-InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
-{
-    InstructionFields fields = {};
-    fields.opcode = instruction;
-    fields.is_32bit = true;
-    // Default T32 instructions are unconditional (AL)
-    fields.cond = 0xE;
-    
-    // Extract first and second halfwords
-    uint16_t first_half = instruction & 0xFFFF;
-    uint16_t second_half = (instruction >> 16) & 0xFFFF;
-
-#if HAS_T32_BL
-    // T32 Branch Instructions (B.W and B<cond>.W)
-    
-    // T32 Unconditional branch (B.W) - 11110xxxxxxxxxxx 10x1xxxxxxxxxxxx
-    // Pattern: F000 9xxx to F7FF 9xxx (but exclude F380-F3FF range for MSR/MRS/other system instructions)
-    if ((first_half & 0xF800) == 0xF000 && (second_half & 0xD000) == 0x9000 && 
-        !((first_half & 0xFF80) == 0xF380)) { // Exclude F380-F3FF range
-        uint32_t S     = (first_half >> 10) & 0x1;
-        uint32_t imm10 =  first_half        & 0x03FF; // [9:0]
-        uint32_t J1    = (second_half >> 13) & 0x1;   // [13]
-        uint32_t J2    = (second_half >> 11) & 0x1;   // [11]
-        uint32_t imm11 =  second_half        & 0x07FF; // [10:0]
-
-        uint32_t I1 = (~(J1 ^ S)) & 0x1;
-        uint32_t I2 = (~(J2 ^ S)) & 0x1;
-
-        // Assemble 25-bit immediate for unconditional branch
-        uint32_t imm25 = (S << 24) | (I1 << 23) | (I2 << 22) | (imm10 << 12) | (imm11 << 1);
-        int32_t signed_imm = (imm25 & 0x01000000) ? (int32_t)(imm25 | 0xFE000000) : (int32_t)imm25;
-
-        fields.type = INST_T32_B;
-        fields.cond = 0xE; // Always  
-        fields.imm  = (uint32_t)signed_imm;
-        return fields;
-    }
-    
-    // T32 Conditional branch (B<cond>.W) - 11110xxxxxxxxxxx 10x0xxxxxxxxxxxx  
-    // Pattern: F000 8xxx to F7FF 8xxx (but exclude F380-F3FF range for MSR/MRS/other system instructions)
-    if ((first_half & 0xF800) == 0xF000 && (second_half & 0xD000) == 0x8000 &&
-        !((first_half & 0xFF80) == 0xF380)) { // Exclude F380-F3FF range
-        uint32_t S     = (first_half >> 10) & 0x1;
-        uint32_t cond  = (first_half >> 6) & 0xF;  // Condition code
-        uint32_t imm6  =  first_half       & 0x03F; // [5:0]
-        uint32_t J1    = (second_half >> 13) & 0x1;   // [13]
-        uint32_t J2    = (second_half >> 11) & 0x1;   // [11]
-        uint32_t imm11 =  second_half       & 0x07FF; // [10:0]
-
-        // For conditional branches, the immediate is smaller (20 bits)
-        uint32_t imm20 = (S << 19) | (J2 << 18) | (J1 << 17) | (imm6 << 11) | imm11;
-        // Apply left shift by 1 before sign extension
-        uint32_t imm21 = imm20 << 1;
-        int32_t signed_imm = (imm21 & 0x00100000) ? (int32_t)(imm21 | 0xFFE00000) : (int32_t)imm21;
-
-        fields.type = INST_T32_B_COND;
-        fields.cond = cond;
-        fields.imm  = (uint32_t)signed_imm;
-        return fields;
-    }
-
-    // ARMv6-M supports only BL as 32-bit T32 instruction
-    if ((first_half & 0xF800) == 0xF000 && (second_half & 0xD000) == 0xD000) {
-        uint32_t S     = (first_half >> 10) & 0x1;
-        uint32_t imm10 =  first_half        & 0x03FF; // [9:0]
-        uint32_t J1    = (second_half >> 13) & 0x1;   // [13]
-        uint32_t J2    = (second_half >> 11) & 0x1;   // [11]
-        uint32_t imm11 =  second_half        & 0x07FF; // [10:0]
-
-        uint32_t I1 = (~(J1 ^ S)) & 0x1;
-        uint32_t I2 = (~(J2 ^ S)) & 0x1;
-
-        // Assemble 25-bit immediate with implicit low bit = 0 (Thumb)
-        uint32_t imm25 = (S << 24) | (I1 << 23) | (I2 << 22) | (imm10 << 12) | (imm11 << 1);
-        int32_t signed_imm = (imm25 & 0x01000000) ? (int32_t)(imm25 | 0xFE000000) : (int32_t)imm25;
-
-        fields.type = INST_T32_BL;
-        fields.cond = 0xE; // Always
-        // For compatibility with Execute::execute_branch (which multiplies imm by 2),
-        // store halfword offset here
-        fields.imm  = (uint32_t)(signed_imm / 2);
-        fields.alu_op = 1; // BL marker
-        return fields;
-    }
-#endif
-
-#if HAS_MEMORY_BARRIERS
-    // Memory barrier instructions (T32)
-    // Format: 11110 01110111 1111 10 00 0000 option
-    // DSB: f3bf 8f4f (option=15, SY)
-    // DMB: f3bf 8f5f (option=15, SY) 
-    // ISB: f3bf 8f6f (option=15, SY)
-    if ((first_half & 0xFFF0) == 0xF3B0 && (second_half & 0xFF00) == 0x8F00) {
-        uint32_t op = (second_half >> 4) & 0xF;
-        uint32_t option = second_half & 0xF;
-
-        switch (op) {
-            case 0x4: // DSB
-                fields.type = INST_T32_DSB;
-                break;
-            case 0x5: // DMB
-                fields.type = INST_T32_DMB;
-                break;
-            case 0x6: // ISB
-                fields.type = INST_T32_ISB;
-                break;
-            default:
-                fields.type = INST_UNKNOWN;
-                break;
-        }
-
-        fields.imm = option; // Store barrier option
-        return fields;
-    }
-#endif
-
-#if HAS_SYSTEM_REGISTERS
-    // MSR instructions (T32)
-    // Format: 11110 0111000 xxxx 1000 xxxx xxxx xxxx
-    // f380 8809 - MSR PSP, r0
-    // f380 8814 - MSR CONTROL, r0
-    if ((first_half & 0xFFE0) == 0xF380 && (second_half & 0xFF00) == 0x8800) {
-        fields.type = INST_T32_MSR;
-        fields.rn = first_half & 0xF; // source register
-        uint32_t spec_reg = second_half & 0xFF; // special register encoding
-        fields.imm = spec_reg; // Store special register number
-        return fields;
-    }
-
-    // MRS instructions (T32)
-    // Format: 11110 0111110 1111 1000 xxxx xxxx xxxx
-    // f3ef 8xxx - MRS rx, spec_reg
-    if ((first_half & 0xFFFF) == 0xF3EF && (second_half & 0xF000) == 0x8000) {
-        fields.type = INST_T32_MRS;
-        fields.rd = (second_half >> 8) & 0xF; // destination register
-        uint32_t spec_reg = second_half & 0xFF; // special register encoding
-        fields.imm = spec_reg; // Store special register number
-        return fields;
-    }
-#endif
-
-#if SUPPORTS_ARMV7_M
-    // --- T32 Load/Store Dual Instructions ---
-    // LDRD/STRD format: 1110 100x x1x1 xxxx xxxx xxxx xxxx xxxx
-    // LDRD: E8D0-E8DF, E950-E95F (immediate), E850-E85F (literal)
-    // STRD: E8C0-E8CF, E940-E94F (immediate)
-    if ((first_half & 0xFE50) == 0xE840 || (first_half & 0xFE50) == 0xE8C0 || 
-        (first_half & 0xFE50) == 0xE850 || (first_half & 0xFE50) == 0xE8D0 ||
-        (first_half & 0xFE50) == 0xE940 || (first_half & 0xFE50) == 0xE950) {
-        
-        bool is_load = ((first_half & 0x0020) != 0) || ((first_half & 0x0010) != 0);
-        uint32_t rn = first_half & 0xF;
-        uint32_t rt = (second_half >> 12) & 0xF;
-        uint32_t rt2 = (second_half >> 8) & 0xF;
-        uint32_t imm8 = second_half & 0xFF;
-        
-        // Convert imm8 to word offset (multiply by 4)
-        uint32_t offset = imm8 << 2;
-        
-        fields.rd = rt;           // First register
-        fields.rm = rt2;          // Second register
-        fields.rn = rn;           // Base register
-        fields.imm = offset;      // Offset (word-aligned)
-        fields.load_store_bit = is_load;
-        fields.type = is_load ? INST_T32_LDRD : INST_T32_STRD;
-        return fields;
-    }
-
-    // --- T32 Data Processing (immediate) Instructions ---
-    // These cover MOV.W, ADD.W, SUB.W, etc. with modified immediate constants
-    // Format: 11110x0xxxxx xxxx 0xxx xxxx xxxx xxxx
-    
-    // Conditional T32 Data Processing - 1111 0xxx xxxx xxxx xxxx xxxx xxxx xxxx
-    // These are conditional execution versions 
-    // ADD.W: f5xx xxxx (where xx encodes operands and condition)
-    if ((first_half & 0xFF00) == 0xF500) {
-        // This is ADDNE.W r3, r2, #8192 pattern: f502 5300
-        fields.type = INST_T32_ADD_IMM;
-        fields.rn = first_half & 0xF;  // r2
-        fields.rd = (second_half >> 8) & 0xF;  // r3
-        fields.cond = 0x1; // NE condition
-        
-        // For this specific encoding, immediate is in different bit positions
-        // f502 5300 -> immediate 0x2000 (8192)
-        uint32_t imm12 = ((second_half & 0x0700) << 4) | (second_half & 0xFF);
-        fields.imm = imm12;
-        
-        return fields;
-    }
-    
-    // Special-case MOV.W immediate for power-of-two constants encoded as F44F xxxx
-    // Example: f44f 5300 -> mov.w r3, #8192 (1 << (imm4+8)) when low imm8 == 0
-    // Must be checked before general MOV/MVN immediate decoder
-    if (first_half == 0xF44F) {
-        uint32_t imm8 = second_half & 0xFF;
-        uint32_t imm4 = (second_half >> 12) & 0xF;
-        uint32_t rd = (second_half >> 8) & 0xF;
-        if (imm8 == 0) {
-            fields.type = INST_T32_MOV_IMM;
-            fields.rd = rd;
-            fields.rn = 0;
-            uint32_t shift = imm4 + 8; // place single 1-bit into higher byte positions
-            fields.imm = (shift < 32) ? (1u << shift) : 0u;
-            return fields;
-        }
-    }
-    
-    // MOV immediate (32-bit) - 11110x0001001111 0xxx xxxx xxxx xxxx
-    // f04f xxxx - MOV.W Rd, #imm 
-    // f06f xxxx - MVN.W Rd, #imm
-    if ((first_half & 0xFBF0) == 0xF040 && (first_half & 0x000F) == 0x000F) {
-        bool is_mvn = (first_half & 0x0400) != 0;
-        fields.type = is_mvn ? INST_T32_MVN_IMM : INST_T32_MOV_IMM;
-        fields.rd = (second_half >> 8) & 0xF;
-        
-        // Decode modified immediate constant (T32 encoding)
-        uint32_t i = (first_half >> 10) & 0x1;
-        uint32_t imm3 = (second_half >> 12) & 0x7;
-        uint32_t imm8 = second_half & 0xFF;
-        fields.imm = decode_t32_modified_immediate(i, imm3, imm8);
-        
-        return fields;
-    }
-    
-    // Data processing immediate instructions
-    // Format: 11110x0xxxxx xxxx 0xxx xxxx xxxx xxxx
-    if ((first_half & 0xFE00) == 0xF000 && (second_half & 0x8000) == 0x0000) {
-        uint32_t op = (first_half >> 5) & 0xF;
-        uint32_t rn = first_half & 0xF;
-        uint32_t rd = (second_half >> 8) & 0xF;
-        bool s_bit = (first_half & 0x0010) != 0;
-        
-        // Decode modified immediate constant
-        uint32_t i = (first_half >> 10) & 0x1;
-        uint32_t imm3 = (second_half >> 12) & 0x7;
-        uint32_t imm8 = second_half & 0xFF;
-        uint32_t imm12 = decode_t32_modified_immediate(i, imm3, imm8);
-        
-        fields.rn = rn;
-        fields.rd = rd;
-        fields.imm = imm12;
-        fields.s_bit = s_bit;
-        
-        switch (op) {
-            case 0x0: // AND
-                fields.type = INST_T32_AND_IMM;
-                break;
-            case 0x1: // BIC
-                fields.type = INST_T32_BIC_IMM;
-                break;
-            case 0x2: // ORR/MOV
-                if (rn == 0xF) {
-                    fields.type = INST_T32_MOV_IMM;
-                    fields.rn = 0; // Clear rn for MOV
-                } else {
-                    fields.type = INST_T32_ORR_IMM;
-                }
-                break;
-            case 0x3: // ORN/MVN
-                if (rn == 0xF) {
-                    fields.type = INST_T32_MVN_IMM;
-                    fields.rn = 0; // Clear rn for MVN
-                } else {
-                    fields.type = INST_T32_ORR_IMM; // ORN treated as ORR for simplicity
-                }
-                break;
-            case 0x4: // EOR
-                fields.type = INST_T32_EOR_IMM;
-                break;
-            case 0x8: // ADD
-                fields.type = INST_T32_ADD_IMM;
-                break;
-            case 0xA: // ADC
-                fields.type = INST_T32_ADC_IMM;
-                break;
-            case 0xB: // SBC
-                fields.type = INST_T32_SBC_IMM;
-                break;
-            case 0xD: // SUB
-                fields.type = INST_T32_SUB_IMM;
-                break;
-            case 0xE: // RSB
-                fields.type = INST_T32_RSB_IMM;
-                break;
-            default:
-                fields.type = INST_UNKNOWN;
-                break;
-        }
-        
-        // Handle compare instructions (no destination register)
-        if (s_bit && rd == 0xF) {
-            switch (op) {
-                case 0x0: fields.type = INST_T32_TST_IMM; break;
-                case 0x4: fields.type = INST_T32_TEQ_IMM; break;
-                case 0x8: fields.type = INST_T32_CMN_IMM; break;
-                case 0xD: fields.type = INST_T32_CMP_IMM; break;
-            }
-        }
-        
-        return fields;
-    }
-    
-    // --- T32 Data Processing (register) Instructions ---
-    // Pattern: 11101010xxxx xxxx 0xxx xxxx xxxx xxxx (EA00-EAFF with bit 15 = 0)
-    // Examples: ea17 0405 -> ands.w r4, r7, r5
-    //           ea05 0506 -> and.w r5, r5, r6
-    if ((first_half & 0xFF00) == 0xEA00 && (second_half & 0x8000) == 0x0000) {
-        uint32_t op = (first_half >> 5) & 0xF; // Operation code bits 8:5
-        bool s_bit = (first_half & 0x0010) != 0; // S bit for flags update
-        uint32_t rn = first_half & 0xF; // First operand register
-        uint32_t rd = (second_half >> 8) & 0xF; // Destination register
-        uint32_t rm = second_half & 0xF; // Second operand register
-    uint32_t shift_type = (second_half >> 4) & 0x3; // Shift type bits 5:4
-    // imm5 is split as imm3:imm2 across halfword
-    uint32_t imm3 = (second_half >> 12) & 0x7;  // bits 14:12
-    uint32_t imm2 = (second_half >> 6) & 0x3;   // bits 7:6
-    uint32_t shift_amount = (imm3 << 2) | imm2; // full 5-bit shift amount
-        
-        fields.rn = rn;
-        fields.rd = rd;
-        fields.rm = rm;
-        fields.shift_type = shift_type;
-        fields.shift_amount = shift_amount;
-        fields.s_bit = s_bit;
-        
-        // Decode operation type
-        switch (op) {
-            case 0x0: // AND
-                fields.type = s_bit ? INST_T32_ANDS_REG : INST_T32_AND_REG;
-                break;
-            case 0x1: // BIC
-                fields.type = s_bit ? INST_T32_BICS_REG : INST_T32_BIC_REG;
-                break;
-            case 0x2: // ORR
-                if (rn == 0xF) {
-                    // MOV (register) alias: ORR with Rn = PC
-                    fields.rn = 0; // not used
-                    fields.type = s_bit ? INST_T32_MOVS_REG : INST_T32_MOV_REG;
-                } else {
-                    fields.type = s_bit ? INST_T32_ORRS_REG : INST_T32_ORR_REG;
-                }
-                break;
-            case 0x3: // ORN (bitwise OR NOT)
-                if (rn == 0xF) {
-                    // MVN (register) alias: ORN with Rn = PC
-                    fields.rn = 0; // not used
-                    fields.type = s_bit ? INST_T32_MVNS_REG : INST_T32_MVN_REG;
-                } else {
-                    fields.type = s_bit ? INST_T32_ORNS_REG : INST_T32_ORN_REG;
-                }
-                break;
-            case 0x4: // EOR
-                fields.type = s_bit ? INST_T32_EORS_REG : INST_T32_EOR_REG;
-                break;
-            case 0x6: // PKH (Pack Halfword) - rarely used
-                fields.type = INST_T32_PKH_REG;
-                break;
-            case 0x8: // ADD
-                fields.type = s_bit ? INST_T32_ADDS_REG : INST_T32_ADD_REG;
-                break;
-            case 0xA: // ADC
-                fields.type = s_bit ? INST_T32_ADCS_REG : INST_T32_ADC_REG;
-                break;
-            case 0xB: // SBC
-                fields.type = s_bit ? INST_T32_SBCS_REG : INST_T32_SBC_REG;
-                break;
-            case 0xD: // SUB
-                fields.type = s_bit ? INST_T32_SUBS_REG : INST_T32_SUB_REG;
-                break;
-            case 0xE: // RSB
-                fields.type = s_bit ? INST_T32_RSBS_REG : INST_T32_RSB_REG;
-                break;
-            default:
-                fields.type = INST_UNKNOWN;
-                break;
-        }
-        
-        // Handle compare instructions (no destination register)
-        if (s_bit && rd == 0xF) {
-            switch (op) {
-                case 0x0: fields.type = INST_T32_TST_REG; break;
-                case 0x4: fields.type = INST_T32_TEQ_REG; break;
-                case 0x8: fields.type = INST_T32_CMN_REG; break;
-                case 0xD: fields.type = INST_T32_CMP_REG; break;
-            }
-        }
-        
-        return fields;
-    }
-    
-    // T32 Data Processing (register) - EBxx encoding (shift amount split as imm3:imm2)
-    // Pattern: 1110 1011 op(4) rn(4) 0 imm3(3) rd(4) imm2(2) type(2) rm(4)
-    // Example: eb03 1202 -> add.w r2, r3, r2, lsl #4
-    if ((first_half & 0xFF00) == 0xEB00 && (second_half & 0x8000) == 0x0000) {
-        uint32_t op = (first_half >> 5) & 0xF;      // Operation code bits 8:5
-        bool s_bit = (first_half & 0x0010) != 0;    // S bit for flags update
-        uint32_t rn = first_half & 0xF;             // First operand register
-        uint32_t rd = (second_half >> 8) & 0xF;     // Destination register
-        uint32_t rm = second_half & 0xF;            // Second operand register
-        uint32_t shift_type = (second_half >> 4) & 0x3; // Shift type bits 5:4
-        uint32_t imm3 = (second_half >> 12) & 0x7;  // imm3 bits 14:12
-        uint32_t imm2 = (second_half >> 6) & 0x3;   // imm2 bits 7:6
-        uint32_t shift_amount = (imm3 << 2) | imm2; // Full 5-bit shift amount
-
-        fields.rn = rn;
-        fields.rd = rd;
-        fields.rm = rm;
-        fields.shift_type = shift_type;
-        fields.shift_amount = shift_amount;
-        fields.s_bit = s_bit;
-
-        switch (op) {
-            case 0x0: fields.type = s_bit ? INST_T32_ANDS_REG : INST_T32_AND_REG; break;
-            case 0x1: fields.type = s_bit ? INST_T32_BICS_REG : INST_T32_BIC_REG; break;
-            case 0x2: fields.type = s_bit ? INST_T32_ORRS_REG : INST_T32_ORR_REG; break;
-            case 0x3: fields.type = s_bit ? INST_T32_ORNS_REG : INST_T32_ORN_REG; break;
-            case 0x4: fields.type = s_bit ? INST_T32_EORS_REG : INST_T32_EOR_REG; break;
-            case 0x6: fields.type = INST_T32_PKH_REG; break;
-            case 0x8: fields.type = s_bit ? INST_T32_ADDS_REG : INST_T32_ADD_REG; break;
-            case 0xA: fields.type = s_bit ? INST_T32_ADCS_REG : INST_T32_ADC_REG; break;
-            case 0xB: fields.type = s_bit ? INST_T32_SBCS_REG : INST_T32_SBC_REG; break;
-            case 0xD: fields.type = s_bit ? INST_T32_SUBS_REG : INST_T32_SUB_REG; break;
-            case 0xE: fields.type = s_bit ? INST_T32_RSBS_REG : INST_T32_RSB_REG; break;
-            default:  fields.type = INST_UNKNOWN; break;
-        }
-
-        if (s_bit && rd == 0xF) {
-            switch (op) {
-                case 0x0: fields.type = INST_T32_TST_REG; break;
-                case 0x4: fields.type = INST_T32_TEQ_REG; break;
-                case 0x8: fields.type = INST_T32_CMN_REG; break;
-                case 0xD: fields.type = INST_T32_CMP_REG; break;
-            }
-        }
-
-        return fields;
-    }
-    
-    // --- T32 Shift Instructions (register) ---
-    // Pattern: 1111 1010 000S xxxx 1111 xxxx 00xx xxxx (FA0x Fxxx)
-    // LSL.W/LSR.W/ASR.W/ROR.W Rd, Rm, Rs
-    // Example: fa05 f302 -> lsl.w r3, r5, r2
-    if ((first_half & 0xFFE0) == 0xFA00 && (second_half & 0xF0C0) == 0xF000) {
-        bool s_bit = (first_half & 0x0010) != 0;    // S bit for flags update
-        uint32_t rm = first_half & 0xF;             // Source register to shift
-        uint32_t rd = (second_half >> 8) & 0xF;     // Destination register  
-        uint32_t rs = second_half & 0xF;            // Register containing shift amount
-        uint32_t shift_type = (second_half >> 4) & 0x3; // Shift type bits 5:4
-        
-        fields.rd = rd;
-        fields.rm = rm; 
-        fields.rn = rs; // Use rn field for shift amount register
-        fields.shift_type = shift_type;
-        fields.shift_amount = 0; // Not used for register shifts
-        fields.s_bit = s_bit;
-        
-        // Decode shift operation type
-        switch (shift_type) {
-            case 0x0: // LSL
-                fields.type = s_bit ? INST_T32_LSLS_REG : INST_T32_LSL_REG;
-                break;
-            case 0x1: // LSR  
-                fields.type = s_bit ? INST_T32_LSRS_REG : INST_T32_LSR_REG;
-                break;
-            case 0x2: // ASR
-                fields.type = s_bit ? INST_T32_ASRS_REG : INST_T32_ASR_REG;
-                break;
-            case 0x3: // ROR
-                fields.type = s_bit ? INST_T32_RORS_REG : INST_T32_ROR_REG;
-                break;
-            default:
-                fields.type = INST_UNKNOWN;
-                break;
-        }
-        
-        return fields;
-    }
-    
-    // --- T32 Load/Store Instructions ---
-    // LDR literal (PC-relative) - 11111000 x101 1111 xxxx xxxxxxxxxxxx
-    // F8DF xxxx: LDR.W Rt, [PC, #±imm12]
-    if ((first_half & 0xFF7F) == 0xF85F && (first_half & 0x000F) == 0x000F) {
-        uint32_t rt = (second_half >> 12) & 0xF;
-        uint32_t imm12 = second_half & 0xFFF;
-        bool u_bit = (first_half & 0x0080) != 0; // Add/subtract bit
-        
-        fields.rn = 15; // PC
-        fields.rd = rt;
-        fields.imm = u_bit ? imm12 : (-imm12 & 0xFFFFFFFF);
-        fields.load_store_bit = 1; // Load
-        fields.type = INST_T32_LDR_PC; // LDR.W from PC
-        return fields;
-    }
-    
-    // LDR/STR immediate (positive offset)
-    // STR.W Rt, [Rn, #imm12]: 1111 1000 1100 rrrr tttt iiii iiii iiii (F8C0-F8CF)
-    // LDR.W Rt, [Rn, #imm12]: 1111 1000 1101 rrrr tttt iiii iiii iiii (F8D0-F8DF)
-    if ((first_half & 0xFFE0) == 0xF8C0 || (first_half & 0xFFE0) == 0xF8D0) {
-        bool is_load = (first_half & 0x0010) != 0; // D bit for load, C bit for store
-        uint32_t rn = first_half & 0xF;
-        uint32_t rt = (second_half >> 12) & 0xF;
-        uint32_t imm12 = second_half & 0xFFF;
-        
-        // Skip PC-relative loads (handled above)
-        if (rn != 15) {
-            fields.rn = rn;
-            fields.rd = rt;
-            fields.imm = imm12;
-            fields.load_store_bit = is_load;
-            fields.type = is_load ? INST_T32_LDR_IMM : INST_T32_STR_IMM;
-            return fields;
-        }
-    }
-
-    // LDRB/STRB immediate (positive offset)
-    // STRB.W Rt, [Rn, #imm12]: 1111 1000 1000 rrrr tttt iiii iiii iiii (F880-F88F)
-    // LDRB.W Rt, [Rn, #imm12]: 1111 1000 1001 rrrr tttt iiii iiii iiii (F890-F89F)
-    if ((first_half & 0xFFE0) == 0xF880 || (first_half & 0xFFE0) == 0xF890) {
-        bool is_load = (first_half & 0x0010) != 0;
-        uint32_t rn = first_half & 0xF;
-        uint32_t rt = (second_half >> 12) & 0xF;
-        uint32_t imm12 = second_half & 0xFFF;
-        
-        if (rn != 15) {
-            fields.rn = rn;
-            fields.rd = rt;
-            fields.imm = imm12;
-            fields.load_store_bit = is_load;
-            fields.type = is_load ? INST_T32_LDRB_IMM : INST_T32_STRB_IMM;
-            return fields;
-        }
-    }
-
-    // LDRH/STRH immediate (positive offset)
-    // STRH.W Rt, [Rn, #imm12]: 1111 1000 1010 rrrr tttt iiii iiii iiii (F8A0-F8AF)
-    // LDRH.W Rt, [Rn, #imm12]: 1111 1000 1011 rrrr tttt iiii iiii iiii (F8B0-F8BF)
-    if ((first_half & 0xFFE0) == 0xF8A0 || (first_half & 0xFFE0) == 0xF8B0) {
-        bool is_load = (first_half & 0x0010) != 0;
-        uint32_t rn = first_half & 0xF;
-        uint32_t rt = (second_half >> 12) & 0xF;
-        uint32_t imm12 = second_half & 0xFFF;
-        
-        if (rn != 15) {
-            fields.rn = rn;
-            fields.rd = rt;
-            fields.imm = imm12;
-            fields.load_store_bit = is_load;
-            fields.type = is_load ? INST_T32_LDRH_IMM : INST_T32_STRH_IMM;
-            return fields;
-        }
-    }
-
-    // T32 Load/Store with immediate and pre/post-indexed addressing (F8xx pattern)
-    // Pattern: 1111 1000 ULSW Rn Rt xxxx xxxx xxxx
-    // U=1 for positive offset, L=1 for load, S=size (0=word,1=byte), W=1 for word vs halfword
-    // F850-F85F: L=1 (load), S=0 (word) -> LDR.W
-    // F840-F84F: L=0 (store), S=0 (word) -> STR.W  
-    // F810-F81F: L=1 (load), S=1 (byte) -> LDRB.W
-    // F800-F80F: L=0 (store), S=1 (byte) -> STRB.W
-    if ((first_half & 0xFF00) == 0xF800 || (first_half & 0xFF00) == 0xF810 ||
-        (first_half & 0xFF00) == 0xF820 || (first_half & 0xFF00) == 0xF830 ||
-        (first_half & 0xFF00) == 0xF840 || (first_half & 0xFF00) == 0xF850) {
-
-        // Extract L bit (bit 4 of first halfword) and determine byte vs word from pattern
-        bool l_bit = (first_half & 0x0010) != 0; // Load=1, Store=0
-        
-        bool is_load = l_bit;
-        bool is_byte = ((first_half & 0xFF00) == 0xF800) || ((first_half & 0xFF00) == 0xF810); // F800/F810 are byte operations
-        uint32_t rn = first_half & 0xF;
-        uint32_t rt = (second_half >> 12) & 0xF;
-
-        bool has_index_bits = (second_half & 0x0800) != 0;   // bit11
-        uint32_t imm8 = second_half & 0xFF;
-
-        if (has_index_bits) {
-            bool p_bit = (second_half & 0x0400) != 0;  // P
-            bool u_bit = (second_half & 0x0200) != 0;  // U (add=1, sub=0)
-            bool w_bit = (second_half & 0x0100) != 0;  // W
-
-            // Pre-indexed: P=1,W=1
-            if (p_bit && w_bit) {
-                fields.rn = rn;
-                fields.rd = rt;
-                fields.imm = imm8; // Always store positive value
-                fields.negative_offset = !u_bit; // U=0 means negative
-                fields.load_store_bit = is_load;
-                fields.pre_indexed = true;
-                fields.writeback = true;
-                if (is_byte) {
-                    fields.type = is_load ? INST_T32_LDRB_PRE_POST : INST_T32_STRB_PRE_POST;
-                } else {
-                    fields.type = is_load ? INST_T32_LDR_PRE_POST : INST_T32_STR_PRE_POST;
-                }
-                return fields;
-            }
-
-            // Post-indexed: P=0,W=1
-            if (!p_bit && w_bit) {
-                fields.rn = rn;
-                fields.rd = rt;
-                fields.imm = imm8; // Always store positive value
-                fields.negative_offset = !u_bit; // U=0 means negative
-                fields.load_store_bit = is_load;
-                fields.pre_indexed = false;
-                fields.writeback = true;
-                if (is_byte) {
-                    fields.type = is_load ? INST_T32_LDRB_PRE_POST : INST_T32_STRB_PRE_POST;
-                } else {
-                    fields.type = is_load ? INST_T32_LDR_PRE_POST : INST_T32_STR_PRE_POST;
-                }
-                return fields;
-            }
-
-            // Offset addressing (no writeback): P=1,W=0 -> treat as immediate form
-            if (p_bit && !w_bit) {
-                fields.rn = rn;
-                fields.rd = rt;
-                fields.imm = imm8;
-                fields.load_store_bit = is_load;
-                fields.pre_indexed = false;
-                fields.writeback = false;
-                fields.negative_offset = !u_bit; // U=0 means subtract
-                if (is_byte) {
-                    fields.type = is_load ? INST_T32_LDRB_IMM : INST_T32_STRB_IMM;
-                } else {
-                    fields.type = is_load ? INST_T32_LDR_IMM : INST_T32_STR_IMM;
-                }
-                return fields;
-            }
-
-            // P=0,W=0 is undefined for this encoding; fall through to not match
-        } else {
-            // Legacy immediate negative-offset variant when bit11=0
-            fields.rn = rn;
-            fields.rd = rt;
-            fields.imm = imm8; // negative offset indicated by pattern; executor/formatter uses negative_offset
-            fields.load_store_bit = is_load;
-            fields.pre_indexed = false;
-            fields.writeback = false;
-            fields.negative_offset = true;
-            if (is_byte) {
-                fields.type = is_load ? INST_T32_LDRB_IMM : INST_T32_STRB_IMM;
-            } else {
-                fields.type = is_load ? INST_T32_LDR_IMM : INST_T32_STR_IMM;
-            }
-            return fields;
-        }
-    }
-
-    // LDRSB/LDRSH immediate (positive offset) - signed variants
-    // LDRSB.W Rt, [Rn, #imm12]: 1111 1001 1001 rrrr tttt iiii iiii iiii (F990-F99F)
-    // LDRSH.W Rt, [Rn, #imm12]: 1111 1001 1011 rrrr tttt iiii iiii iiii (F9B0-F9BF)
-    if ((first_half & 0xFFE0) == 0xF990 || (first_half & 0xFFE0) == 0xF9B0) {
-        bool is_halfword = (first_half & 0x0020) != 0; // Bit 5 distinguishes SB (0) vs SH (1)
-        uint32_t rn = first_half & 0xF;
-        uint32_t rt = (second_half >> 12) & 0xF;
-        uint32_t imm12 = second_half & 0xFFF;
-        
-        if (rn != 15) {
-            fields.rn = rn;
-            fields.rd = rt;
-            fields.imm = imm12;
-            fields.load_store_bit = 1; // Always load
-            fields.type = is_halfword ? INST_T32_LDRSH_IMM : INST_T32_LDRSB_IMM;
-            return fields;
-        }
-    }
-#endif
-
-#if SUPPORTS_ARMV7_M
-    // --- ARMv7-M Extended T32 Instructions ---
-    
-    // Multiple Load/Store Instructions (T32)
-    // LDMIA: 11101000 1001 rrrr xxxx xxxx xxxx xxxx (E890-E89F)
-    // LDMDB: 11101000 1011 rrrr xxxx xxxx xxxx xxxx (E8B0-E8BF) 
-    // STMIA: 11101000 1000 rrrr xxxx xxxx xxxx xxxx (E880-E88F)
-    // STMDB: 11101001 00x0 rrrr xxxx xxxx xxxx xxxx (E900-E92F)
-    if (((first_half & 0xFF00) == 0xE800) || ((first_half & 0xFF00) == 0xE900)) {
-        bool is_e9_series = (first_half & 0xFF00) == 0xE900;
-        uint32_t rn = first_half & 0xF;
-        uint16_t reg_list = second_half;
-        
-        fields.rn = rn;
-        fields.reg_list = reg_list;
-        
-        if (is_e9_series) {
-            // E900-E92F series: STMDB
-            fields.load_store_bit = 0; // Store
-            fields.type = INST_T32_STMDB;
-        } else {
-            // E800 series: determine based on bits [5:4]
-            uint32_t op = (first_half >> 4) & 0x3;
-            switch (op) {
-                case 0: // STMIA (E880)
-                    fields.load_store_bit = 0;
-                    fields.type = INST_T32_STMIA;
-                    break;
-                case 1: // LDMIA (E890)
-                    fields.load_store_bit = 1;
-                    fields.type = INST_T32_LDMIA;
-                    break;
-                case 3: // LDMDB (E8B0)
-                    fields.load_store_bit = 1;
-                    fields.type = INST_T32_LDMDB;
-                    break;
-                default:
-                    return fields; // Unknown encoding
-            }
-        }
-        return fields;
-    }    // Table Branch Instructions (TBB/TBH)
-    // TBB [Rn, Rm]        - 11101000 1101 xxxx 1111 0000 0000 xxxx 
-    // TBH [Rn, Rm, LSL#1] - 11101000 1101 xxxx 1111 0000 0001 xxxx
-    if ((first_half & 0xFFF0) == 0xE8D0 && (second_half & 0xFFE0) == 0xF000) {
-        bool is_halfword = (second_half & 0x0010) != 0;
-        fields.type = is_halfword ? INST_T32_TBH : INST_T32_TBB;
-        fields.rn = first_half & 0xF;           // Base register
-        fields.rm = second_half & 0xF;          // Index register  
-        return fields;
-    }
-
-    // Clear Exclusive (CLREX)
-    // Format: 11110011 10111111 10000111 00100000 (F3BF 8720)
-    if (first_half == 0xF3BF && second_half == 0x8720) {
-        fields.type = INST_T32_CLREX;
-        return fields;
-    }
-
-#if HAS_EXCLUSIVE_ACCESS
-    // Exclusive Access Instructions
-    // LDREX:  11101000 0101 xxxx xxxx 1111 xxxxxxxx (E850 xxFx)
-    // STREX:  11101000 0100 xxxx xxxx 1111 xxxxxxxx (E840 xxFx)
-    // LDREXB: 11101000 1101 xxxx xxxx 1111 0100xxxx (E8D0 xxF4)
-    // STREXB: 11101000 1100 xxxx xxxx 1111 0100xxxx (E8C0 xxF4)
-    // LDREXH: 11101000 1101 xxxx xxxx 1111 0101xxxx (E8D0 xxF5)
-    // STREXH: 11101000 1100 xxxx xxxx 1111 0101xxxx (E8C0 xxF5)
-    
-    if ((first_half & 0xFFF0) == 0xE850 && (second_half & 0x00F0) == 0x00F0) {
-        // LDREX Rt, [Rn, #imm8]
-        fields.type = INST_T32_LDREX;
-        fields.rn = first_half & 0xF;           // Base register
-        fields.rd = (second_half >> 12) & 0xF;  // Destination register
-        fields.imm = (second_half & 0xFF) << 2; // Offset (word-aligned)
-        return fields;
-    }
-    
-    if ((first_half & 0xFFF0) == 0xE840 && (second_half & 0x00F0) == 0x00F0) {
-        // STREX Rd, Rt, [Rn, #imm8]
-        fields.type = INST_T32_STREX;
-        fields.rn = first_half & 0xF;           // Base register
-        fields.rm = (second_half >> 12) & 0xF;  // Status register (Rd)
-        fields.rd = (second_half >> 8) & 0xF;   // Source register (Rt)
-        fields.imm = (second_half & 0xFF) << 2; // Offset (word-aligned)
-        return fields;
-    }
-    
-    if ((first_half & 0xFFF0) == 0xE8D0 && (second_half & 0x00FF) == 0x00F4) {
-        // LDREXB Rt, [Rn]
-        fields.type = INST_T32_LDREXB;
-        fields.rn = first_half & 0xF;           // Base register
-        fields.rd = (second_half >> 12) & 0xF;  // Destination register
-        return fields;
-    }
-    
-    if ((first_half & 0xFFF0) == 0xE8C0 && (second_half & 0x00FF) == 0x00F4) {
-        // STREXB Rd, Rt, [Rn]
-        fields.type = INST_T32_STREXB;
-        fields.rn = first_half & 0xF;           // Base register
-        fields.rm = (second_half >> 12) & 0xF;  // Status register (Rd)
-        fields.rd = (second_half >> 8) & 0xF;   // Source register (Rt)
-        return fields;
-    }
-    
-    if ((first_half & 0xFFF0) == 0xE8D0 && (second_half & 0x00FF) == 0x00F5) {
-        // LDREXH Rt, [Rn]
-        fields.type = INST_T32_LDREXH;
-        fields.rn = first_half & 0xF;           // Base register
-        fields.rd = (second_half >> 12) & 0xF;  // Destination register
-        return fields;
-    }
-    
-    if ((first_half & 0xFFF0) == 0xE8C0 && (second_half & 0x00FF) == 0x00F5) {
-        // STREXH Rd, Rt, [Rn]
-        fields.type = INST_T32_STREXH;
-        fields.rn = first_half & 0xF;           // Base register
-        fields.rm = (second_half >> 12) & 0xF;  // Status register (Rd)
-        fields.rd = (second_half >> 8) & 0xF;   // Source register (Rt)
-        return fields;
-    }
-#endif
-
-#if HAS_HARDWARE_DIVIDE
-    // Hardware Divide Instructions
-    // UDIV: 1111 1011 1011 rrrr 1111 dddd 1111 mmmm  (first=FBBx, second=F d F m)
-    // SDIV: 1111 1011 1001 rrrr 1111 dddd 1111 mmmm  (first=FB9x, second=F d F m)
-    if (((first_half & 0xFFF0) == 0xFBB0 || (first_half & 0xFFF0) == 0xFB90) &&
-        (second_half & 0xF0F0) == 0xF0F0) {            // FIX: was 0xF000
-        bool is_unsigned = (first_half & 0x0020) != 0;  // bit5 distinguishes UDIV(1)/SDIV(0)
-        fields.type = is_unsigned ? INST_T32_UDIV : INST_T32_SDIV;
-        fields.rn = first_half & 0xF;                  // dividend (Rn)
-        fields.rd = (second_half >> 8) & 0xF;          // result   (Rd)
-        fields.rm = second_half & 0xF;                 // divisor  (Rm)
-        return fields;
-    }
-    
-    // MLA/MLS: 1111 1011 0000 Rn Ra Rd op Rm (FB00-FB0F)
-    // MLA: op = 0000, MLS: op = 0001
-    if ((first_half & 0xFFF0) == 0xFB00) {
-        uint32_t op = (second_half >> 4) & 0xF; // Extract op field
-        
-        if (op == 0x0) {
-            fields.type = INST_T32_MLA;
-        } else if (op == 0x1) {
-            fields.type = INST_T32_MLS;
-        } else {
-            fields.type = INST_UNKNOWN; // Invalid op for MLA/MLS
-        }
-        
-        fields.rn = first_half & 0xF;          // Multiplicand
-        fields.rs = (second_half >> 12) & 0xF; // Addend (Ra)
-        fields.rd = (second_half >> 8) & 0xF;  // Destination
-        fields.rm = second_half & 0xF;         // Multiplier
-        return fields;
-    }
-    
-    // Long Multiply Instructions: 1111 1011 1010 Rn RdLo RdHi op Rm (FBA0-FBAF)
-    // UMULL: op = 0000, SMULL: op = 0001, UMLAL: op = 0010, SMLAL: op = 0011
-    if ((first_half & 0xFFF0) == 0xFBA0) {
-        uint32_t op = (second_half >> 4) & 0xF; // Extract op field
-        
-        switch (op) {
-            case 0x0:
-                fields.type = INST_T32_UMULL;
-                break;
-            case 0x1:
-                fields.type = INST_T32_SMULL;
-                break;
-            case 0x2:
-                fields.type = INST_T32_UMLAL;
-                break;
-            case 0x3:
-                fields.type = INST_T32_SMLAL_;
-                break;
-            default:
-                fields.type = INST_UNKNOWN; // Invalid op for long multiply
-                break;
-        }
-        
-        fields.rn = first_half & 0xF;          // Rn (operand 1)
-        fields.rd = (second_half >> 12) & 0xF; // RdLo (result low)
-        fields.rs = (second_half >> 8) & 0xF;  // RdHi (result high)
-        fields.rm = second_half & 0xF;         // Rm (operand 2)
-        return fields;
-    }
-#endif
-
-#if HAS_BIT_MANIPULATION
-    // Bit Manipulation Instructions
-    // CLZ:    11111010 1011 xxxx 1111 xxxx 1000 xxxx (FAB0 F08x)
-    // RBIT:   11111010 1001 xxxx 1111 xxxx 1010 xxxx (FA90 F0Ax) 
-    // REV:    11111010 1001 xxxx 1111 xxxx 1000 xxxx (FA90 F08x)
-    // REV16:  11111010 1001 xxxx 1111 xxxx 1001 xxxx (FA90 F09x)
-    // REVSH:  11111010 1001 xxxx 1111 xxxx 1011 xxxx (FA90 F0Bx)
-    
-    // CLZ - Count Leading Zeros
-    if ((first_half & 0xFFF0) == 0xFAB0 && (second_half & 0xFFF0) == 0xF080) {
-        fields.type = INST_T32_CLZ;
-        fields.rm = first_half & 0xF;           // Source register
-        fields.rd = (second_half >> 8) & 0xF;   // Destination register
-        return fields;
-    }
-    
-    // RBIT - Reverse Bits
-    if ((first_half & 0xFFF0) == 0xFA90 && (second_half & 0xFFF0) == 0xF0A0) {
-        fields.type = INST_T32_RBIT;
-        fields.rm = first_half & 0xF;           // Source register
-        fields.rd = (second_half >> 8) & 0xF;   // Destination register
-        return fields;
-    }
-    
-    // REV - Byte-Reverse Word
-    if ((first_half & 0xFFF0) == 0xFA90 && (second_half & 0xFFF0) == 0xF080) {
-        fields.type = INST_T32_REV;
-        fields.rm = first_half & 0xF;           // Source register
-        fields.rd = (second_half >> 8) & 0xF;   // Destination register
-        return fields;
-    }
-    
-    // REV16 - Byte-Reverse Packed Halfword  
-    if ((first_half & 0xFFF0) == 0xFA90 && (second_half & 0xFFF0) == 0xF090) {
-        fields.type = INST_T32_REV16;
-        fields.rm = first_half & 0xF;           // Source register
-        fields.rd = (second_half >> 8) & 0xF;   // Destination register
-        return fields;
-    }
-    
-    // REVSH - Byte-Reverse Signed Halfword
-    if ((first_half & 0xFFF0) == 0xFA90 && (second_half & 0xFFF0) == 0xF0B0) {
-        fields.type = INST_T32_REVSH;
-        fields.rm = first_half & 0xF;           // Source register
-        fields.rd = (second_half >> 8) & 0xF;   // Destination register
-        return fields;
-    }
-#endif
-
-#if HAS_BITFIELD_INSTRUCTIONS
-    // Bit Field Instructions
-    // BFI:  11110011 0110 xxxx 0xxx xxxx xxxx xxxx (F360)
-    // BFC:  11110011 0110 1111 0xxx xxxx xxxx xxxx (F36F)
-    // UBFX: 11111000 1100 xxxx 0xxx xxxx xxxx xxxx (F8C0)
-    // SBFX: 11110011 0100 xxxx 0xxx xxxx xxxx xxxx (F340)
-    
-    // BFI - Bit Field Insert
-    if ((first_half & 0xFFF0) == 0xF360 && (first_half & 0xF) != 0xF) {
-        fields.type = INST_T32_BFI;
-        fields.rn = first_half & 0xF;           // Source
-        fields.rd = (second_half >> 8) & 0xF;   // Destination
-        fields.imm = ((second_half & 0x7000) >> 10) | ((second_half & 0xC0) >> 6); // msb:lsb
-        return fields;
-    }
-    
-    // BFC - Bit Field Clear
-    if (first_half == 0xF36F) {
-        fields.type = INST_T32_BFC;
-        fields.rd = (second_half >> 8) & 0xF;   // Destination
-        fields.imm = ((second_half & 0x7000) >> 10) | ((second_half & 0xC0) >> 6); // msb:lsb
-        return fields;
-    }
-    
-    // UBFX - Unsigned Bit Field Extract
-    if ((first_half & 0xFFC0) == 0xF3C0) {
-        fields.type = INST_T32_UBFX;
-        fields.rn = first_half & 0xF;           // Source
-        fields.rd = (second_half >> 8) & 0xF;   // Destination  
-        fields.imm = ((second_half & 0x7000) >> 10) | ((second_half & 0xC0) >> 6); // msb:lsb
-        return fields;
-    }
-    
-    // SBFX - Signed Bit Field Extract  
-    if ((first_half & 0xFFC0) == 0xF340) {
-        fields.type = INST_T32_SBFX;
-        fields.rn = first_half & 0xF;           // Source
-        fields.rd = (second_half >> 8) & 0xF;   // Destination
-        fields.imm = ((second_half & 0x7000) >> 10) | ((second_half & 0xC0) >> 6); // msb:lsb  
-        return fields;
-    }
-#endif
-
-#if HAS_SATURATING_ARITHMETIC
-    // Saturating Arithmetic Instructions
-    // SSAT: 11110011 00xx xxxx 0xxx xxxx xxxx xxxx (F300-F33F)
-    // USAT: 11110011 10xx xxxx 0xxx xxxx xxxx xxxx (F380-F3BF)
-    
-    // SSAT - Signed Saturate
-    if ((first_half & 0xFFC0) == 0xF300) {
-        fields.type = INST_T32_SSAT;
-        fields.rn = first_half & 0xF;           // Source register
-        fields.rd = (second_half >> 8) & 0xF;   // Destination
-        fields.imm = ((first_half & 0x1F) << 16) | (second_half & 0x7F); // sat_imm:shift
-        return fields;
-    }
-    
-    // USAT - Unsigned Saturate
-    if ((first_half & 0xFFC0) == 0xF380) {
-        fields.type = INST_T32_USAT;
-        fields.rn = first_half & 0xF;           // Source register  
-        fields.rd = (second_half >> 8) & 0xF;   // Destination
-        fields.imm = ((first_half & 0x1F) << 16) | (second_half & 0x7F); // sat_imm:shift
-        return fields;
-    }
-#endif
-#endif // SUPPORTS_ARMV7_M
-
-    // Unknown/unsupported T32 instruction for this architecture
-    fields.type = INST_UNKNOWN;
-    return fields;
-}
-
-bool Instruction::is_32bit_instruction(uint32_t instruction)
-{
-    // Check if this is a 32-bit Thumb-2 instruction
-    uint16_t first_half = (uint16_t)(instruction & 0xFFFF);
-    
-    // 32-bit instructions start with specific bit patterns in first halfword:
-    // 11101 - Load/Store multiple, Load/Store dual, Table branch, etc.
-    // 11110 - BL and other T32 instructions  
-    // 11111 - More T32 instructions
-    return ((first_half & 0xF800) == 0xE800) || 
-           ((first_half & 0xF800) == 0xF000) || 
-           ((first_half & 0xF800) == 0xF800);
-}
+}// ============================================================================
+// T32 Instruction Decoding Helper Functions
+// ============================================================================
 
 // ARM ARM shared functions
 static inline uint32_t ROR_C(uint32_t x, uint32_t shift, bool& carry_out)
@@ -1530,4 +519,2296 @@ uint32_t Instruction::decode_t32_modified_immediate(uint32_t i, uint32_t imm3, u
     
     // Use ARM ARM standard ThumbExpandImm function
     return ThumbExpandImm(imm12);
+}
+
+// Helper function for T32 branch immediate calculation
+static int32_t decode_t32_branch_immediate(uint32_t instruction, bool is_bl_or_unconditional) {
+    uint32_t S  = (instruction >> 26) & 0x1;  // bit 26
+    uint32_t J1 = (instruction >> 13) & 0x1;  // bit 13
+    uint32_t J2 = (instruction >> 11) & 0x1;  // bit 11
+    
+    if (is_bl_or_unconditional) {
+        // BL or B.W: use 25-bit immediate
+        uint32_t imm10 = (instruction >> 16) & 0x03FF; // bits 25-16
+        uint32_t imm11 = instruction & 0x07FF;         // bits 10-0
+        uint32_t I1 = (~(J1 ^ S)) & 0x1;
+        uint32_t I2 = (~(J2 ^ S)) & 0x1;
+        uint32_t imm25 = (S << 24) | (I1 << 23) | (I2 << 22) | (imm10 << 12) | (imm11 << 1);
+        return (imm25 & 0x01000000) ? (int32_t)(imm25 | 0xFE000000) : (int32_t)imm25;
+    } else {
+        // B<cond>.W: use 20-bit immediate  
+        uint32_t imm6  = (instruction >> 16) & 0x003F; // bits 21-16
+        uint32_t imm11 = instruction & 0x07FF;         // bits 10-0
+        uint32_t I1 = (~(J1 ^ S)) & 0x1;
+        uint32_t I2 = (~(J2 ^ S)) & 0x1;
+        uint32_t imm20 = (S << 19) | (I1 << 18) | (I2 << 17) | (imm6 << 11) | (imm11 << 1);
+        return (imm20 & 0x00080000) ? (int32_t)(imm20 | 0xFFF00000) : (int32_t)imm20;
+    }
+}
+
+// Helper function for data processing immediate instructions
+static bool decode_t32_data_processing_imm(uint32_t instruction, InstructionFields& fields) {
+    if ((instruction & 0xF8000000) != 0xF0000000) return false;
+    
+    uint32_t op = (instruction >> 21) & 0xF;
+    bool s_bit = (instruction & 0x00100000) != 0;
+    uint32_t rn = (instruction >> 16) & 0xF;
+    uint32_t rd = (instruction >> 8) & 0xF;
+    
+    // Extract and decode modified immediate constant
+    uint32_t i = (instruction >> 26) & 0x1;
+    uint32_t imm3 = (instruction >> 12) & 0x7;
+    uint32_t imm8 = instruction & 0xFF;
+    // Build imm12 = i:imm3:imm8 and expand using ARM ThumbExpandImm
+    uint32_t imm12 = (i << 11) | (imm3 << 8) | imm8;
+    uint32_t imm_value = ThumbExpandImm(imm12);
+
+    // Set common fields
+    fields.rd = rd;
+    fields.rn = rn;
+    fields.imm = imm_value;
+    fields.s_bit = s_bit;
+    
+    // Decode instruction type based on opcode
+    static const InstructionType op_table[16] = {
+        INST_T32_AND_IMM, INST_T32_BIC_IMM, INST_T32_ORR_IMM, INST_UNKNOWN,
+        INST_T32_EOR_IMM, INST_UNKNOWN,     INST_UNKNOWN,     INST_UNKNOWN,
+        INST_T32_ADD_IMM, INST_UNKNOWN,     INST_T32_ADC_IMM, INST_T32_SBC_IMM,
+        INST_UNKNOWN,     INST_T32_SUB_IMM, INST_T32_RSB_IMM, INST_UNKNOWN
+    };
+    fields.type = op_table[op];
+    
+    // Handle compare instructions (S=1, Rd=0xF)
+    if (s_bit && rd == 0xF) {
+        switch (op) {
+            case 0x0: fields.type = INST_T32_TST_IMM; break;
+            case 0x4: fields.type = INST_T32_TEQ_IMM; break;
+            case 0x8: fields.type = INST_T32_CMN_IMM; break;
+            case 0xD: fields.type = INST_T32_CMP_IMM; break;
+        }
+    }
+    return true;
+}
+
+// Helper function for data processing register instructions  
+static bool decode_t32_data_processing_reg(uint32_t instruction, InstructionFields& fields) {
+    if ((instruction & 0xFF008000) != 0xEA000000 && (instruction & 0xFF008000) != 0xEB000000) {
+        return false;
+    }
+    
+    uint32_t op = (instruction >> 21) & 0xF;
+    bool s_bit = (instruction & 0x00100000) != 0;
+    uint32_t rn = (instruction >> 16) & 0xF;
+    uint32_t rd = (instruction >> 8) & 0xF;
+    uint32_t rm = instruction & 0xF;
+    uint32_t shift_type = (instruction >> 4) & 0x3;
+    uint32_t imm3 = (instruction >> 12) & 0x7;
+    uint32_t imm2 = (instruction >> 6) & 0x3;
+    uint32_t shift_amount = (imm3 << 2) | imm2;
+    
+    // Set common fields
+    fields.rn = rn;
+    fields.rd = rd;
+    fields.rm = rm;
+    fields.shift_type = shift_type;
+    fields.shift_amount = shift_amount;
+    fields.s_bit = s_bit;
+    
+    // Decode instruction type with S bit consideration
+    switch (op) {
+        case 0x0: fields.type = s_bit ? INST_T32_ANDS_REG : INST_T32_AND_REG; break;
+        case 0x1: fields.type = s_bit ? INST_T32_BICS_REG : INST_T32_BIC_REG; break;
+        case 0x2: 
+            if (rn == 0xF) {
+                fields.type = s_bit ? INST_T32_MOVS_REG : INST_T32_MOV_REG;
+                fields.rn = 0;
+            } else {
+                fields.type = s_bit ? INST_T32_ORRS_REG : INST_T32_ORR_REG;
+            }
+            break;
+        case 0x3:
+            if (rn == 0xF) {
+                fields.type = s_bit ? INST_T32_MVNS_REG : INST_T32_MVN_REG;
+                fields.rn = 0;
+            } else {
+                fields.type = s_bit ? INST_T32_ORNS_REG : INST_T32_ORN_REG;
+            }
+            break;
+        case 0x4: fields.type = s_bit ? INST_T32_EORS_REG : INST_T32_EOR_REG; break;
+        case 0x6: fields.type = INST_T32_PKH_REG; break;
+        case 0x8: fields.type = s_bit ? INST_T32_ADDS_REG : INST_T32_ADD_REG; break;
+        case 0xA: fields.type = s_bit ? INST_T32_ADCS_REG : INST_T32_ADC_REG; break;
+        case 0xB: fields.type = s_bit ? INST_T32_SBCS_REG : INST_T32_SBC_REG; break;
+        case 0xD: fields.type = s_bit ? INST_T32_SUBS_REG : INST_T32_SUB_REG; break;
+        case 0xE: fields.type = s_bit ? INST_T32_RSBS_REG : INST_T32_RSB_REG; break;
+        default: fields.type = INST_UNKNOWN; break;
+    }
+    
+    // Compare instructions (S=1, Rd=0xF)
+    if (s_bit && rd == 0xF) {
+        switch (op) {
+            case 0x0: fields.type = INST_T32_TST_REG; break;
+            case 0x4: fields.type = INST_T32_TEQ_REG; break;
+            case 0x8: fields.type = INST_T32_CMN_REG; break;
+            case 0xD: fields.type = INST_T32_CMP_REG; break;
+        }
+    }
+    return true;
+}
+
+#if HAS_MEMORY_BARRIERS || HAS_SYSTEM_REGISTERS
+// Helper function for system instructions
+static bool decode_t32_system_instr(uint32_t instruction, InstructionFields& fields) {
+#if HAS_MEMORY_BARRIERS
+    // Memory barrier instructions
+    if ((instruction & 0xFFF0FF00) == 0xF3B08F00) {
+        uint32_t op = (instruction >> 4) & 0xF;
+        uint32_t option = instruction & 0xF;
+        
+        switch (op) {
+            case 0x4: fields.type = INST_T32_DSB; break;
+            case 0x5: fields.type = INST_T32_DMB; break;
+            case 0x6: fields.type = INST_T32_ISB; break;
+            default: fields.type = INST_UNKNOWN; break;
+        }
+        fields.imm = option;
+        return true;
+    }
+#endif
+    
+#if HAS_SYSTEM_REGISTERS
+    // MSR instructions
+    if ((instruction & 0xFFE0FF00) == 0xF3808800) {
+        fields.type = INST_T32_MSR;
+        fields.rn = (instruction >> 16) & 0xF;
+        fields.imm = instruction & 0xFF;
+        return true;
+    }
+    
+    // MRS instructions
+    if ((instruction & 0xFFFFF000) == 0xF3EF8000) {
+        fields.type = INST_T32_MRS;
+        fields.rd = (instruction >> 8) & 0xF;
+        fields.imm = instruction & 0xFF;
+        return true;
+    }
+#endif
+    return false;
+}
+#endif
+
+#if HAS_MULTIPLY_INSTRUCTIONS
+// T32 Multiply Instructions Helper Function
+static bool decode_t32_multiply_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, bool is_long = false) {
+    if ((instruction & mask) == pattern) {
+        if (is_long) {
+            // Long multiply instructions (FBA0 pattern)
+            uint32_t op = (instruction >> 4) & 0xF;
+            fields.rn = (instruction >> 16) & 0xF;      // Rn (operand 1)
+            fields.rd = (instruction >> 12) & 0xF;      // RdLo (result low)
+            fields.rs = (instruction >> 8) & 0xF;       // RdHi (result high)
+            fields.rm = instruction & 0xF;              // Rm (operand 2)
+            
+            switch (op) {
+                case 0x0: fields.type = INST_T32_UMULL; break;
+                case 0x1: fields.type = INST_T32_SMULL; break;
+                case 0x2: fields.type = INST_T32_UMLAL; break;
+                case 0x3: fields.type = INST_T32_SMLAL_; break;
+                default: fields.type = INST_UNKNOWN; break;
+            }
+        } else {
+            // Regular multiply instructions (FB00 pattern)
+            uint32_t op = (instruction >> 4) & 0xF;
+            uint32_t ra = (instruction >> 12) & 0xF;
+            
+            if (op == 0x0) {
+                fields.type = (ra == 0xF) ? INST_T32_MUL : INST_T32_MLA;
+            } else if (op == 0x1) {
+                fields.type = INST_T32_MLS;
+            } else {
+                fields.type = INST_UNKNOWN;
+            }
+            
+            fields.rn = (instruction >> 16) & 0xF;      // Multiplicand
+            fields.rs = ra;                             // Addend (Ra)
+            fields.rd = (instruction >> 8) & 0xF;       // Destination
+            fields.rm = instruction & 0xF;              // Multiplier
+        }
+        return true;
+    }
+    return false;
+}
+#endif
+
+#if HAS_BIT_MANIPULATION
+// T32 Bit Manipulation Instructions Helper Function
+static bool decode_t32_bit_manip_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type) {
+    if ((instruction & mask) == pattern) {
+        fields.type = type;
+        fields.rm = (instruction >> 16) & 0xF;      // Source register
+        fields.rd = (instruction >> 8) & 0xF;       // Destination register
+        return true;
+    }
+    return false;
+}
+#endif
+
+#if HAS_BITFIELD_INSTRUCTIONS
+// T32 Bit Field Instructions Helper Function
+static bool decode_t32_bitfield_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, 
+                                      InstructionType type, bool has_rn = true, bool is_extract = false) {
+    if ((instruction & mask) == pattern) {
+        fields.type = type;
+        if (has_rn) {
+            fields.rn = (instruction >> 16) & 0xF;  // Source
+        }
+        fields.rd = (instruction >> 8) & 0xF;       // Destination
+        
+        // Decode bit field parameters (lsb and width/msb)
+        uint32_t imm3 = (instruction >> 12) & 0x7;
+        uint32_t imm2 = (instruction >> 6) & 0x3;
+        uint32_t lsb = (imm3 << 2) | imm2;
+        uint32_t field_value = instruction & 0x1F;
+        
+        if (is_extract) {
+            // For UBFX/SBFX: field_value is width-1
+            uint32_t width = field_value + 1;
+            fields.imm = (width << 8) | lsb;
+        } else {
+            // For BFI/BFC: field_value is msb
+            fields.imm = (field_value << 8) | lsb;
+        }
+        return true;
+    }
+    return false;
+}
+#endif
+
+// T32 Sign/Zero Extend Instructions Helper Function
+static bool decode_t32_extend_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type) {
+    if ((instruction & mask) == pattern) {
+        fields.type = type;
+        fields.rn = instruction & 0xF;              // Source register (Rm)
+        fields.rd = (instruction >> 8) & 0xF;       // Destination register
+        return true;
+    }
+    return false;
+}
+
+#if HAS_SATURATING_ARITHMETIC
+// T32 Saturating Arithmetic Instructions Helper Function
+static bool decode_t32_saturating_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type) {
+    if ((instruction & mask) == pattern) {
+        fields.type = type;
+        fields.rn = (instruction >> 16) & 0xF;      // Source register
+        fields.rd = (instruction >> 8) & 0xF;       // Destination
+        fields.imm = (((instruction >> 16) & 0x1F) << 16) | (instruction & 0x7F); // sat_imm:shift
+        return true;
+    }
+    return false;
+}
+#endif
+
+// T32 Load/Store Instructions Helper Function
+static bool decode_t32_load_store_immediate(uint32_t instruction, InstructionFields& fields, uint32_t pattern_mask, uint32_t pattern_value, 
+                                             InstructionType load_type, InstructionType store_type) {
+    if ((instruction & pattern_mask) == pattern_value) {
+        bool is_load = (instruction & 0x00100000) != 0;
+        uint32_t rn = (instruction >> 16) & 0xF;
+        uint32_t rt = (instruction >> 12) & 0xF;
+        uint32_t imm12 = instruction & 0xFFF;
+        
+        // Skip PC-relative loads for non-PC-relative patterns
+        if (rn != 15 || pattern_value == 0xF85F0000) {
+            fields.rn = (pattern_value == 0xF85F0000) ? 15 : rn; // Special case for PC-relative
+            fields.rd = rt;
+            fields.imm = imm12;
+            fields.load_store_bit = is_load;
+            fields.type = is_load ? load_type : store_type;
+            return true;
+        }
+    }
+    return false;
+}
+
+// T32 Indexed Addressing Helper Function
+static bool decode_t32_indexed_addressing(uint32_t instruction, InstructionFields& fields, bool is_load, bool is_byte, uint32_t rn, uint32_t rt, 
+                                          uint32_t imm8, bool p_bit, bool u_bit, bool w_bit) {
+    if (p_bit && w_bit) {
+        // Pre-indexed addressing
+        fields.pre_indexed = true;
+        fields.writeback = true;
+    } else if (!p_bit && w_bit) {
+        // Post-indexed addressing  
+        fields.pre_indexed = false;
+        fields.writeback = true;
+    } else if (p_bit && !w_bit) {
+        // Offset addressing (no writeback)
+        fields.pre_indexed = true;
+        fields.writeback = false;
+    } else {
+        // Unpredictable
+        return false;
+    }
+    
+    fields.rn = rn;
+    fields.rd = rt;
+    fields.imm = u_bit ? imm8 : (-((int32_t)imm8)) & 0xFFFFFFFF;
+    fields.load_store_bit = is_load;
+    
+    if (is_byte) {
+        fields.type = is_load ? INST_T32_LDRB_IMM : INST_T32_STRB_IMM;
+    } else {
+        fields.type = is_load ? INST_T32_LDR_IMM : INST_T32_STR_IMM;
+    }
+    return true;
+}
+
+#if SUPPORTS_ARMV7_M
+// T32 Multiple Load/Store Instructions Helper Function  
+static bool decode_t32_multiple_load_store(uint32_t instruction, InstructionFields& fields) {
+    if ((instruction & 0xFF000000) != 0xE8000000 && (instruction & 0xFF000000) != 0xE9000000) {
+        return false;
+    }
+    
+    bool is_e9_series = (instruction & 0xFF000000) == 0xE9000000;
+    uint32_t rn = (instruction >> 16) & 0xF;
+    uint16_t reg_list = instruction & 0xFFFF;
+    
+    fields.rn = rn;
+    fields.reg_list = reg_list;
+    
+    if (is_e9_series) {
+        // E900-E92F series: STMDB
+        fields.load_store_bit = 0;
+        fields.type = INST_T32_STMDB;
+    } else {
+        // E800 series: determine based on bits [21:20]
+        uint32_t op = (instruction >> 20) & 0x3;
+        switch (op) {
+            case 0: // STMIA (E880)
+                fields.load_store_bit = 0;
+                fields.type = INST_T32_STMIA;
+                break;
+            case 1: // LDMIA (E890)
+                fields.load_store_bit = 1;
+                fields.type = INST_T32_LDMIA;
+                break;
+            case 3: // LDMDB (E8B0)
+                fields.load_store_bit = 1;
+                fields.type = INST_T32_LDMDB;
+                break;
+            default:
+                fields.type = INST_UNKNOWN;
+                break;
+        }
+    }
+    return true;
+}
+
+// T32 Table Branch Instructions Helper Function
+static bool decode_t32_table_branch(uint32_t instruction, InstructionFields& fields) {
+    if ((instruction & 0xFFF0FFE0) == 0xE8D0F000) {
+        bool is_halfword = (instruction & 0x0010) != 0;
+        fields.type = is_halfword ? INST_T32_TBH : INST_T32_TBB;
+        fields.rn = (instruction >> 16) & 0xF;
+        fields.rm = instruction & 0xF;
+        return true;
+    }
+    return false;
+}
+
+#if HAS_EXCLUSIVE_ACCESS
+// T32 Exclusive Access Instructions Helper Function
+static bool decode_t32_exclusive_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type,
+                                       bool has_imm = false, bool has_rd_rt = false) {
+    if ((instruction & mask) == pattern) {
+        fields.type = type;
+        fields.rn = (instruction >> 16) & 0xF;
+        
+        if (has_rd_rt) {
+            fields.rm = (instruction >> 12) & 0xF;  // Status register (Rd)
+            fields.rd = (instruction >> 8) & 0xF;   // Source register (Rt)
+        } else {
+            fields.rd = (instruction >> 12) & 0xF;  // Destination register
+        }
+        
+        if (has_imm) {
+            fields.imm = (instruction & 0xFF) << 2; // Offset (word-aligned)
+        }
+        return true;
+    }
+    return false;
+}
+#endif
+#endif
+
+InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
+{
+    InstructionFields fields = {};
+    fields.opcode = instruction;
+    fields.is_32bit = true;
+    fields.cond = 0xE; // 默认 AL
+
+    // 按 A5.3 表格精确分类: op1 (bits 28:27), op2 (bits 26:20), op (bit 15)
+    uint32_t op1 = (instruction >> 27) & 0x3;    // bits 28:27 (2 bits)
+    uint32_t op2 = (instruction >> 20) & 0x7F;   // bits 26:20 (7 bits) - 根据ARM手册表格
+    uint32_t op = (instruction >> 15) & 0x1;     // bit 15
+
+    if (op1 == 0x1) {
+        // 01 00xx 0xx x: Load/store multiple
+        if ((op2 & 0x64) == 0x00 && op == 0) {
+            // 按照ARM手册A5-16表格实现加载/存储多个寄存器指令
+            uint32_t op_field = (instruction >> 23) & 0x3;    // bits 24:23 (op)
+            uint32_t L = (instruction >> 20) & 0x1;           // bit 20 (L)
+            uint32_t W = (instruction >> 21) & 0x1;           // bit 21 (W)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (W.Rn)
+            
+            // 按照A5-16表格的op、L、W.Rn字段分类
+            switch (op_field) {
+                case 0x1: // 01
+                    if (L == 0) {
+                        // 01 0: Store Multiple (Increment After, Empty Ascending)
+                        fields.type = INST_T32_STMIA;
+                        fields.rn = rn;
+                        fields.imm = instruction & 0xFFFF;  // register_list
+                        fields.load_store_bit = 0;
+                        fields.writeback = (W == 1);
+                        return fields;
+                    } else {
+                        // 01 1
+                        if ((W == 1) && (rn == 0xD)) {
+                            // 01 1 1.1101: Pop Multiple Registers from the stack
+                            fields.type = INST_T16_POP;  // Use T16 POP for now
+                            fields.rn = rn;
+                            fields.imm = instruction & 0xFFFF;  // register_list
+                            fields.load_store_bit = 1;
+                            fields.writeback = true;
+                            return fields;
+                        } else {
+                            // 01 1 not(1.1101): Load Multiple (Increment After, Full Descending)
+                            fields.type = INST_T32_LDMIA;
+                            fields.rn = rn;
+                            fields.imm = instruction & 0xFFFF;  // register_list
+                            fields.load_store_bit = 1;
+                            fields.writeback = (W == 1);
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x2: // 10
+                    if (L == 1) {
+                        // 10 1: Load Multiple (Decrement Before, Empty Ascending)
+                        fields.type = INST_T32_LDMDB;
+                        fields.rn = rn;
+                        fields.imm = instruction & 0xFFFF;  // register_list
+                        fields.load_store_bit = 1;
+                        fields.writeback = (W == 1);
+                        return fields;
+                    } else {
+                        // 10 0
+                        if ((W == 1) && (rn == 0xD)) {
+                            // 10 0 1.1101: Push Multiple Registers to the stack
+                            fields.type = INST_T16_PUSH;  // Use T16 PUSH for now
+                            fields.rn = rn;
+                            fields.imm = instruction & 0xFFFF;  // register_list
+                            fields.load_store_bit = 0;
+                            fields.writeback = true;
+                            return fields;
+                        } else {
+                            // 10 0 not(1.1101): Store Multiple (Decrement Before, Full Descending)
+                            fields.type = INST_T32_STMDB;
+                            fields.rn = rn;
+                            fields.imm = instruction & 0xFFFF;  // register_list
+                            fields.load_store_bit = 0;
+                            fields.writeback = (W == 1);
+                            return fields;
+                        }
+                    }
+                    break;
+                default:
+                    // op = 00 or 11 are not defined in the table
+                    fields.type = INST_UNKNOWN;
+                    return fields;
+            }
+        }
+        
+        // 01 00xx 1xx x: Load/store dual or exclusive, table branch
+        else if ((op2 & 0x64) == 0x04) {
+            // 按照ARM手册A5-17表格实现加载/存储双字或独占访问、表分支指令
+            uint32_t op1_field = (instruction >> 23) & 0x3;   // bits 24:23 (op1)
+            uint32_t op2_field = (instruction >> 20) & 0x3;   // bits 21:20 (op2)
+            uint32_t op3_field = (instruction >> 4) & 0xF;    // bits 7:4 (op3)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            
+            // 按照A5-17表格的op1、op2、op3字段分类
+            switch (op1_field) {
+                case 0x0: // 00
+                    switch (op2_field) {
+                        case 0x0: // 00 00 xxxx: Store Register Exclusive
+#if HAS_EXCLUSIVE_ACCESS
+                            fields.type = INST_T32_STREX;
+                            fields.rn = rn;                           // Rn (base)
+                            fields.rd = (instruction >> 8) & 0xF;    // Rd (status)
+                            fields.rm = (instruction >> 12) & 0xF;   // Rt (data)
+                            fields.imm = (instruction & 0xFF) << 2;  // imm8 << 2
+                            fields.load_store_bit = 0;
+                            return fields;
+#endif
+                            break;
+                        case 0x1: // 00 01 xxxx: Load Register Exclusive
+#if HAS_EXCLUSIVE_ACCESS
+                            fields.type = INST_T32_LDREX;
+                            fields.rn = rn;                           // Rn (base)
+                            fields.rd = (instruction >> 12) & 0xF;   // Rt (data)
+                            fields.imm = (instruction & 0xFF) << 2;  // imm8 << 2
+                            fields.load_store_bit = 1;
+                            return fields;
+#endif
+                            break;
+                        case 0x2: // 00 10 xxxx: Store Register Dual
+                            fields.type = INST_T32_STRD;
+                            fields.rn = rn;                           // Rn (base)
+                            fields.rd = (instruction >> 12) & 0xF;   // Rt (first register)
+                            fields.rm = (instruction >> 8) & 0xF;    // Rt2 (second register)
+                            fields.imm = (instruction & 0xFF) << 2;  // imm8 << 2
+                            fields.load_store_bit = 0;
+                            return fields;
+                        case 0x3: // 00 11 xxxx: Load Register Dual
+                            fields.type = INST_T32_LDRD;
+                            fields.rn = rn;                           // Rn (base)
+                            fields.rd = (instruction >> 12) & 0xF;   // Rt (first register)
+                            fields.rm = (instruction >> 8) & 0xF;    // Rt2 (second register)
+                            fields.imm = (instruction & 0xFF) << 2;  // imm8 << 2
+                            fields.load_store_bit = 1;
+                            return fields;
+                        default:
+                            fields.type = INST_UNKNOWN;
+                            return fields;
+                    }
+                    break;
+                case 0x1: // 01
+                    switch (op2_field) {
+                        case 0x0: // 01 00
+                            switch (op3_field) {
+                                case 0x4: // 01 00 0100: Store Register Exclusive Byte
+#if HAS_EXCLUSIVE_ACCESS
+                                    fields.type = INST_T32_STREXB;
+                                    fields.rn = rn;                           // Rn (base)
+                                    fields.rd = (instruction >> 8) & 0xF;    // Rd (status)
+                                    fields.rm = (instruction >> 12) & 0xF;   // Rt (data)
+                                    fields.load_store_bit = 0;
+                                    return fields;
+#endif
+                                    break;
+                                case 0x5: // 01 00 0101: Store Register Exclusive Halfword
+#if HAS_EXCLUSIVE_ACCESS
+                                    fields.type = INST_T32_STREXH;
+                                    fields.rn = rn;                           // Rn (base)
+                                    fields.rd = (instruction >> 8) & 0xF;    // Rd (status)
+                                    fields.rm = (instruction >> 12) & 0xF;   // Rt (data)
+                                    fields.load_store_bit = 0;
+                                    return fields;
+#endif
+                                    break;
+                                default:
+                                    fields.type = INST_UNKNOWN;
+                                    return fields;
+                            }
+                            break;
+                        case 0x1: // 01 01
+                            switch (op3_field) {
+                                case 0x0: // 01 01 0000: Table Branch Byte
+                                    fields.type = INST_T32_TBB;
+                                    fields.rn = rn;                           // Rn (base)
+                                    fields.rm = instruction & 0xF;            // Rm (offset)
+                                    return fields;
+                                case 0x1: // 01 01 0001: Table Branch Halfword
+                                    fields.type = INST_T32_TBH;
+                                    fields.rn = rn;                           // Rn (base)
+                                    fields.rm = instruction & 0xF;            // Rm (offset)
+                                    return fields;
+                                case 0x4: // 01 01 0100: Load Register Exclusive Byte
+#if HAS_EXCLUSIVE_ACCESS
+                                    fields.type = INST_T32_LDREXB;
+                                    fields.rn = rn;                           // Rn (base)
+                                    fields.rd = (instruction >> 12) & 0xF;   // Rt (data)
+                                    fields.load_store_bit = 1;
+                                    return fields;
+#endif
+                                    break;
+                                case 0x5: // 01 01 0101: Load Register Exclusive Halfword
+#if HAS_EXCLUSIVE_ACCESS
+                                    fields.type = INST_T32_LDREXH;
+                                    fields.rn = rn;                           // Rn (base)
+                                    fields.rd = (instruction >> 12) & 0xF;   // Rt (data)
+                                    fields.load_store_bit = 1;
+                                    return fields;
+#endif
+                                    break;
+                                default:
+                                    fields.type = INST_UNKNOWN;
+                                    return fields;
+                            }
+                            break;
+                        default:
+                            fields.type = INST_UNKNOWN;
+                            return fields;
+                    }
+                    break;
+                case 0x2: // 10 xx xxxx: Load Register Dual (literal)
+                case 0x3: // 11 xx xxxx: Load Register Dual (literal)
+                    if (op2_field == 0x1) {
+                        // 1x 01 xxxx: Load Register Dual (literal)
+                        fields.type = INST_T32_LDRD_LIT;
+                        fields.rd = (instruction >> 12) & 0xF;   // Rt (first register)
+                        fields.rm = (instruction >> 8) & 0xF;    // Rt2 (second register)
+                        fields.imm = (instruction & 0xFF) << 2;  // imm8 << 2
+                        // Handle U bit for positive/negative offset
+                        bool u_bit = (instruction & 0x00800000) != 0;
+                        if (!u_bit) {
+                            fields.imm = (-static_cast<int32_t>(fields.imm)) & 0xFFFFFFFF;
+                        }
+                        fields.load_store_bit = 1;
+                        return fields;
+                    }
+                    break;
+                default:
+                    fields.type = INST_UNKNOWN;
+                    return fields;
+            }
+            
+            // Default fallback for unrecognized patterns
+            fields.type = INST_UNKNOWN;
+            return fields;
+        }
+        
+        // 01 01xx xxx x: Data processing (shifted register)
+        else if ((op2 & 0x60) == 0x20) {
+            // 按照ARM手册A5-22表格实现数据处理(移位寄存器)指令
+            uint32_t op_field = (instruction >> 21) & 0xF;    // bits 24:21 (op)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            uint32_t rd = (instruction >> 8) & 0xF;           // bits 11:8 (Rd)
+            uint32_t s_bit = (instruction >> 20) & 0x1;       // bit 20 (S)
+            uint32_t rm = instruction & 0xF;                  // bits 3:0 (Rm)
+            uint32_t shift_type = (instruction >> 4) & 0x3;   // bits 5:4 (type)
+            uint32_t shift_imm = ((instruction >> 12) & 0x7) << 2 | ((instruction >> 6) & 0x3); // imm5
+            
+            // 设置通用字段
+            fields.rd = rd;
+            fields.rn = rn;
+            fields.rm = rm;
+            fields.s_bit = (s_bit == 1);
+            fields.shift_type = shift_type;
+            fields.shift_amount = shift_imm;
+            
+            // 按照A5-22表格的op、Rn、Rd、S字段分类
+            switch (op_field) {
+                case 0x0: // 0000: Bitwise AND
+                    if (rn != 0xF) {
+                        if (rd != 0xF) {
+                            fields.type = INST_T32_AND_REG;  // Bitwise AND
+                        } else {
+                            // Rd = 1111, S = 0: UNPREDICTABLE
+                            // Rd = 1111, S = 1: Test
+                            if (s_bit == 1) {
+                                fields.type = INST_T32_TST_REG;
+                            } else {
+                                fields.type = INST_UNKNOWN;  // UNPREDICTABLE
+                            }
+                        }
+                    } else {
+                        fields.type = INST_UNKNOWN;  // Rn = 1111 not defined
+                    }
+                    break;
+                case 0x1: // 0001: Bitwise Bit Clear
+                    fields.type = INST_T32_BIC_REG;
+                    break;
+                case 0x2: // 0010: Bitwise OR
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_ORR_REG;  // Bitwise Inclusive OR
+                    } else {
+                        // Rn = 1111: Move register and immediate shifts
+                        if (shift_type == 0 && shift_imm == 0) {
+                            fields.type = INST_T32_MOV_REG;  // MOV (register)
+                        } else {
+                            // Shifted register moves (LSL, LSR, ASR, ROR)
+                            switch (shift_type) {
+                                case 0: fields.type = INST_T32_LSL_IMM; break;  // LSL
+                                case 1: fields.type = INST_T32_LSR_IMM; break;  // LSR
+                                case 2: fields.type = INST_T32_ASR_IMM; break;  // ASR
+                                case 3: fields.type = INST_T32_ROR_IMM; break;  // ROR
+                            }
+                        }
+                        fields.rn = 0;  // Clear Rn for move operations
+                    }
+                    break;
+                case 0x3: // 0011: Bitwise OR NOT
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_ORN_REG;  // Bitwise OR NOT
+                    } else {
+                        fields.type = INST_T32_MVN_REG;  // Bitwise NOT
+                        fields.rn = 0;
+                    }
+                    break;
+                case 0x4: // 0100: Bitwise Exclusive OR
+                    if (rn != 0xF) {
+                        if (rd != 0xF) {
+                            fields.type = INST_T32_EOR_REG;  // Bitwise Exclusive OR
+                        } else {
+                            // Rd = 1111, S = 0: UNPREDICTABLE
+                            // Rd = 1111, S = 1: Test Equivalence
+                            if (s_bit == 1) {
+                                fields.type = INST_T32_TEQ_REG;
+                            } else {
+                                fields.type = INST_UNKNOWN;  // UNPREDICTABLE
+                            }
+                        }
+                    } else {
+                        fields.type = INST_UNKNOWN;  // Rn = 1111 not defined
+                    }
+                    break;
+                case 0x6: // 0110: Pack Halfword
+#if SUPPORTS_ARMV7_M
+                    fields.type = INST_T32_PKHBT;  // Pack halfword (bottom/top)
+                    // Determine PKHBT vs PKHTB based on shift type
+                    if (shift_type == 2) {  // ASR shift indicates PKHTB
+                        fields.type = INST_T32_PKHTB;
+                    }
+#endif
+                    break;
+                case 0x8: // 1000: Add
+                    if (rn != 0xF) {
+                        if (rd != 0xF) {
+                            fields.type = INST_T32_ADD_REG;  // Add
+                        } else {
+                            // Rd = 1111, S = 0: UNPREDICTABLE
+                            // Rd = 1111, S = 1: Compare Negative
+                            if (s_bit == 1) {
+                                fields.type = INST_T32_CMN_REG;
+                            } else {
+                                fields.type = INST_UNKNOWN;  // UNPREDICTABLE
+                            }
+                        }
+                    } else {
+                        fields.type = INST_UNKNOWN;  // Rn = 1111 not defined
+                    }
+                    break;
+                case 0xA: // 1010: Add with Carry
+                    fields.type = INST_T32_ADC_REG;
+                    break;
+                case 0xB: // 1011: Subtract with Carry
+                    fields.type = INST_T32_SBC_REG;
+                    break;
+                case 0xD: // 1101: Subtract
+                    if (rn != 0xF) {
+                        if (rd != 0xF) {
+                            fields.type = INST_T32_SUB_REG;  // Subtract
+                        } else {
+                            // Rd = 1111, S = 0: UNPREDICTABLE
+                            // Rd = 1111, S = 1: Compare
+                            if (s_bit == 1) {
+                                fields.type = INST_T32_CMP_REG;
+                            } else {
+                                fields.type = INST_UNKNOWN;  // UNPREDICTABLE
+                            }
+                        }
+                    } else {
+                        fields.type = INST_UNKNOWN;  // Rn = 1111 not defined
+                    }
+                    break;
+                case 0xE: // 1110: Reverse Subtract
+                    fields.type = INST_T32_RSB_REG;
+                    break;
+                default:
+                    fields.type = INST_UNKNOWN;
+                    break;
+            }
+            return fields;
+        }
+        
+        // 01 1xxx xxx x: Coprocessor instructions
+        else if ((op2 & 0x40) == 0x40) {
+            // 按照ARM手册A5-30表格实现协处理器指令
+            uint32_t op1_field = (instruction >> 20) & 0x3F;  // bits 25:20 (op1)
+            uint32_t coproc = (instruction >> 8) & 0xF;       // bits 11:8 (coproc)
+            uint32_t op_field = (instruction >> 4) & 0x1;     // bit 4 (op)
+            
+            // 按照A5-30表格的op1、coproc、op字段分类
+            if ((op1_field & 0x21) == 0x00) { // 0xxxx0: Store Coprocessor
+                fields.type = INST_T32_STC;
+                fields.rd = coproc;                           // 协处理器编号
+                fields.rm = (instruction >> 12) & 0xF;       // CRd
+                fields.rn = (instruction >> 16) & 0xF;       // Rn (base register)
+                fields.imm = (instruction & 0xFF) << 2;      // imm8 << 2
+                fields.load_store_bit = 0;
+                // 处理P、U、W位
+                bool p_bit = (instruction & 0x01000000) != 0;  // bit 24
+                bool u_bit = (instruction & 0x00800000) != 0;  // bit 23
+                bool w_bit = (instruction & 0x00200000) != 0;  // bit 21
+                fields.addressing_mode = (p_bit ? 4 : 0) | (u_bit ? 2 : 0) | (w_bit ? 1 : 0);
+                return fields;
+            }
+            else if ((op1_field & 0x21) == 0x01) { // 0xxxx1: Load Coprocessor
+                if (((instruction >> 16) & 0xF) != 0xF) {
+                    fields.type = INST_T32_LDC;               // LDC (immediate)
+                } else {
+                    fields.type = INST_T32_LDC_LIT;           // LDC (literal)
+                }
+                fields.rd = coproc;                           // 协处理器编号
+                fields.rm = (instruction >> 12) & 0xF;       // CRd
+                fields.rn = (instruction >> 16) & 0xF;       // Rn (base register)
+                fields.imm = (instruction & 0xFF) << 2;      // imm8 << 2
+                fields.load_store_bit = 1;
+                // 处理P、U、W位
+                bool p_bit = (instruction & 0x01000000) != 0;  // bit 24
+                bool u_bit = (instruction & 0x00800000) != 0;  // bit 23
+                bool w_bit = (instruction & 0x00200000) != 0;  // bit 21
+                fields.addressing_mode = (p_bit ? 4 : 0) | (u_bit ? 2 : 0) | (w_bit ? 1 : 0);
+                return fields;
+            }
+            else if (op1_field == 0x04) { // 000100: Move to Coprocessor from two ARM core registers
+                fields.type = INST_T32_MCRR;
+                fields.rd = coproc;                           // 协处理器编号
+                fields.rm = (instruction >> 12) & 0xF;       // Rt (first ARM register)
+                fields.rn = (instruction >> 16) & 0xF;       // Rt2 (second ARM register)
+                fields.imm = instruction & 0xF;               // CRm
+                fields.load_store_bit = 0;
+                return fields;
+            }
+            else if (op1_field == 0x05) { // 000101: Move to two ARM core registers from Coprocessor
+                fields.type = INST_T32_MRRC;
+                fields.rd = coproc;                           // 协处理器编号
+                fields.rm = (instruction >> 12) & 0xF;       // Rt (first ARM register)
+                fields.rn = (instruction >> 16) & 0xF;       // Rt2 (second ARM register)
+                fields.imm = instruction & 0xF;               // CRm
+                fields.load_store_bit = 1;
+                return fields;
+            }
+            else if ((op1_field & 0x30) == 0x20) { // 10xxxx: Coprocessor data operations and register transfers
+                if (op_field == 0) {
+                    // 10xxxx 0: Coprocessor data operations
+                    fields.type = INST_T32_CDP;
+                    fields.rd = coproc;                       // 协处理器编号
+                    fields.rm = (instruction >> 12) & 0xF;   // CRd
+                    fields.rn = (instruction >> 16) & 0xF;   // CRn
+                    fields.imm = ((instruction >> 21) & 0x7) << 8 | (instruction & 0xF); // opc1:CRm
+                    fields.shift_amount = (instruction >> 5) & 0x7; // opc2
+                    return fields;
+                }
+                else if (op_field == 1) {
+                    // 10xxxx 1: Move to/from Coprocessor from/to ARM core register
+                    uint32_t L = (instruction >> 20) & 0x1;  // bit 20 (L)
+                    if (L == 0) {
+                        // 10xxx0 1: Move to Coprocessor from ARM core register
+                        fields.type = INST_T32_MCR;
+                        fields.rd = coproc;                       // 协处理器编号
+                        fields.rm = (instruction >> 12) & 0xF;   // Rt (ARM register)
+                        fields.rn = (instruction >> 16) & 0xF;   // CRn
+                        fields.imm = ((instruction >> 21) & 0x7) << 8 | (instruction & 0xF); // opc1:CRm
+                        fields.shift_amount = (instruction >> 5) & 0x7; // opc2
+                        fields.load_store_bit = 0;
+                        return fields;
+                    } else {
+                        // 10xxx1 1: Move to ARM core register from Coprocessor
+                        fields.type = INST_T32_MRC;
+                        fields.rd = coproc;                       // 协处理器编号
+                        fields.rm = (instruction >> 12) & 0xF;   // Rt (ARM register)
+                        fields.rn = (instruction >> 16) & 0xF;   // CRn
+                        fields.imm = ((instruction >> 21) & 0x7) << 8 | (instruction & 0xF); // opc1:CRm
+                        fields.shift_amount = (instruction >> 5) & 0x7; // opc2
+                        fields.load_store_bit = 1;
+                        return fields;
+                    }
+                }
+            }
+            
+            // 对于Cortex-M，大部分协处理器指令不被支持
+            // 仅系统协处理器(cp15)的部分指令被支持
+            if (coproc == 15) {
+                // 系统协处理器指令，可能被支持
+                fields.type = INST_T32_SYSTEM_CP;
+                return fields;
+            } else {
+                // 其他协处理器在Cortex-M中不被支持
+                fields.type = INST_UNDEFINED;
+                return fields;
+            }
+        }
+    }
+    else if (op1 == 0x2) {
+        // 10 x0xx xxx 0: Data processing (modified immediate)
+        if (((op2 & 0x40) == 0x00) && (op == 0)) {
+            // 按照ARM手册A5-10表格实现32位修改立即数数据处理指令
+            uint32_t op_field = (instruction >> 21) & 0xF;  // bits 24:21
+            uint32_t rn = (instruction >> 16) & 0xF;        // bits 19:16
+            uint32_t rd = (instruction >> 8) & 0xF;         // bits 11:8
+            bool s_bit = (instruction & 0x00100000) != 0;   // bit 20
+            
+            // 提取修改立即数
+            uint32_t i = (instruction >> 26) & 0x1;
+            uint32_t imm3 = (instruction >> 12) & 0x7;
+            uint32_t imm8 = instruction & 0xFF;
+            uint32_t imm_value = decode_t32_modified_immediate(i, imm3, imm8);
+            
+            // 设置通用字段
+            fields.rd = rd;
+            fields.rn = rn;
+            fields.imm = imm_value;
+            fields.s_bit = s_bit;
+            
+            // 按照A5-10表格的op字段分类
+            switch (op_field) {
+                case 0x0: // 0000x
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_AND_IMM;  // Bitwise AND
+                    } else {
+                        fields.type = INST_T32_TST_IMM;  // Test (when Rn=1111)
+                    }
+                    break;
+                case 0x1: // 0001x
+                    fields.type = INST_T32_BIC_IMM;  // Bitwise Clear
+                    break;
+                case 0x2: // 0010x
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_ORR_IMM;  // Bitwise Inclusive OR
+                    } else {
+                        fields.type = INST_T32_MOV_IMM;  // Move (when Rn=1111)
+                        fields.rn = 0;
+                    }
+                    break;
+                case 0x3: // 0011x
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_ORN_IMM;  // Bitwise OR NOT
+                    } else {
+                        fields.type = INST_T32_MVN_IMM;  // Bitwise NOT (when Rn=1111)
+                        fields.rn = 0;
+                    }
+                    break;
+                case 0x4: // 0100x
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_EOR_IMM;  // Bitwise Exclusive OR
+                    } else {
+                        fields.type = INST_T32_TEQ_IMM;  // Test Equivalence (when Rn=1111)
+                    }
+                    break;
+                case 0x8: // 1000x
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_ADD_IMM;  // Add
+                    } else {
+                        fields.type = INST_T32_CMN_IMM;  // Compare Negative (when Rn=1111)
+                    }
+                    break;
+                case 0xA: // 1010x
+                    fields.type = INST_T32_ADC_IMM;  // Add with Carry
+                    break;
+                case 0xB: // 1011x
+                    fields.type = INST_T32_SBC_IMM;  // Subtract with Carry
+                    break;
+                case 0xD: // 1101x
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_SUB_IMM;  // Subtract
+                    } else {
+                        fields.type = INST_T32_CMP_IMM;  // Compare (when Rn=1111)
+                    }
+                    break;
+                case 0xE: // 1110x
+                    fields.type = INST_T32_RSB_IMM;  // Reverse Subtract
+                    break;
+                default:
+                    fields.type = INST_UNKNOWN;
+                    break;
+            }
+            return fields;
+        }
+        // 10 x1xx xxx 0: Data processing (plain binary immediate)
+        else if (((op2 & 0x40) == 0x40) && (op == 0)) {
+            // 按照ARM手册A5-12表格实现32位未修改立即数数据处理指令
+            uint32_t op_field = (instruction >> 20) & 0x1F;  // bits 24:20 (5 bits)
+            uint32_t rn = (instruction >> 16) & 0xF;         // bits 19:16
+            uint32_t rd = (instruction >> 8) & 0xF;          // bits 11:8
+            
+            // 按照A5-12表格的op字段分类
+            switch (op_field) {
+                case 0x00: { // 00000: Add Wide, 12-bit
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_ADDW;
+                        fields.rn = rn;
+                        fields.rd = rd;
+                        // 提取12位立即数: i:imm3:imm8
+                        uint32_t i = (instruction >> 26) & 0x1;
+                        uint32_t imm3 = (instruction >> 12) & 0x7;
+                        uint32_t imm8 = instruction & 0xFF;
+                        fields.imm = (i << 11) | (imm3 << 8) | imm8;
+                    } else {
+                        // Rn = 1111: Form PC-relative Address, ADR
+                        fields.type = INST_T32_ADR;
+                        fields.rd = rd;
+                        uint32_t i = (instruction >> 26) & 0x1;
+                        uint32_t imm3 = (instruction >> 12) & 0x7;
+                        uint32_t imm8 = instruction & 0xFF;
+                        fields.imm = (i << 11) | (imm3 << 8) | imm8;
+                    }
+                    break;
+                }
+                case 0x04: { // 00100: Move Wide, 16-bit
+                    fields.type = INST_T32_MOVW;
+                    fields.rd = rd;
+                    // 提取16位立即数: imm4:i:imm3:imm8
+                    uint32_t imm4 = (instruction >> 16) & 0xF;
+                    uint32_t i = (instruction >> 26) & 0x1;
+                    uint32_t imm3 = (instruction >> 12) & 0x7;
+                    uint32_t imm8 = instruction & 0xFF;
+                    fields.imm = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+                    break;
+                }
+                case 0x0A: { // 01010: Subtract Wide, 12-bit
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_SUBW;
+                        fields.rn = rn;
+                        fields.rd = rd;
+                        // 提取12位立即数: i:imm3:imm8
+                        uint32_t i = (instruction >> 26) & 0x1;
+                        uint32_t imm3 = (instruction >> 12) & 0x7;
+                        uint32_t imm8 = instruction & 0xFF;
+                        fields.imm = (i << 11) | (imm3 << 8) | imm8;
+                    } else {
+                        // Rn = 1111: Form PC-relative Address, ADR
+                        fields.type = INST_T32_ADR;
+                        fields.rd = rd;
+                        uint32_t i = (instruction >> 26) & 0x1;
+                        uint32_t imm3 = (instruction >> 12) & 0x7;
+                        uint32_t imm8 = instruction & 0xFF;
+                        fields.imm = (i << 11) | (imm3 << 8) | imm8;
+                    }
+                    break;
+                }
+                case 0x0C: { // 01100: Move Top, 16-bit
+                    fields.type = INST_T32_MOVT;
+                    fields.rd = rd;
+                    // 提取16位立即数: imm4:i:imm3:imm8
+                    uint32_t imm4 = (instruction >> 16) & 0xF;
+                    uint32_t i = (instruction >> 26) & 0x1;
+                    uint32_t imm3 = (instruction >> 12) & 0x7;
+                    uint32_t imm8 = instruction & 0xFF;
+                    fields.imm = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+                    break;
+                }
+                case 0x10: { // 10000: Signed Saturate
+                    fields.type = INST_T32_SSAT;
+                    fields.rd = rd;
+                    fields.rn = instruction & 0xF;  // Rm
+                    // 提取饱和位数和移位量
+                    uint32_t sat_imm = ((instruction >> 16) & 0x1F) + 1;  // saturate_to = sat_imm + 1
+                    uint32_t shift_type = (instruction >> 5) & 0x1;       // sh
+                    uint32_t shift_imm = ((instruction >> 12) & 0x7) << 2 | ((instruction >> 6) & 0x3);
+                    fields.imm = (sat_imm << 16) | (shift_type << 8) | shift_imm;
+                    break;
+                }
+#if SUPPORTS_ARMV7_M
+                case 0x12: { // 10010: Signed Saturate, two 16-bit
+                    fields.type = INST_T32_SSAT;
+                    fields.rd = rd;
+                    fields.rn = instruction & 0xF;  // Rm
+                    uint32_t sat_imm = ((instruction >> 16) & 0xF) + 1;  // saturate_to = sat_imm + 1
+                    fields.imm = sat_imm;
+                    break;
+                }
+#endif
+                case 0x14: { // 10100: Signed Bit Field Extract
+                    fields.type = INST_T32_SBFX;
+                    fields.rd = rd;
+                    fields.rn = instruction & 0xF;  // Rm
+                    // 提取位域参数
+                    uint32_t lsb = ((instruction >> 12) & 0x7) << 2 | ((instruction >> 6) & 0x3);
+                    uint32_t widthm1 = (instruction >> 16) & 0x1F;  // width = widthm1 + 1
+                    fields.imm = (lsb << 8) | (widthm1 + 1);
+                    break;
+                }
+                case 0x16: { // 10110: Bit Field Insert
+                    if (rn != 0xF) {
+                        fields.type = INST_T32_BFI;
+                        fields.rn = rn;
+                    } else {
+                        fields.type = INST_T32_BFC;  // Bit Field Clear when Rn = 1111
+                    }
+                    fields.rd = rd;
+                    // 提取位域参数
+                    uint32_t lsb = ((instruction >> 12) & 0x7) << 2 | ((instruction >> 6) & 0x3);
+                    uint32_t msb = (instruction >> 16) & 0x1F;
+                    fields.imm = (lsb << 8) | (msb - lsb + 1);  // width = msb - lsb + 1
+                    break;
+                }
+                case 0x18: { // 11000: Unsigned Saturate
+                    fields.type = INST_T32_USAT;
+                    fields.rd = rd;
+                    fields.rn = instruction & 0xF;  // Rm
+                    // 提取饱和位数和移位量
+                    uint32_t sat_imm = (instruction >> 16) & 0x1F;       // saturate_to
+                    uint32_t shift_type = (instruction >> 5) & 0x1;      // sh
+                    uint32_t shift_imm = ((instruction >> 12) & 0x7) << 2 | ((instruction >> 6) & 0x3);
+                    fields.imm = (sat_imm << 16) | (shift_type << 8) | shift_imm;
+                    break;
+                }
+#if SUPPORTS_ARMV7_M
+                case 0x1A: { // 11010: Unsigned Saturate, two 16-bit
+                    fields.type = INST_T32_USAT;
+                    fields.rd = rd;
+                    fields.rn = instruction & 0xF;  // Rm
+                    uint32_t sat_imm = (instruction >> 16) & 0xF;  // saturate_to
+                    fields.imm = sat_imm;
+                    break;
+                }
+#endif
+                case 0x1C: { // 11100: Unsigned Bit Field Extract
+                    fields.type = INST_T32_UBFX;
+                    fields.rd = rd;
+                    fields.rn = instruction & 0xF;  // Rm
+                    // 提取位域参数
+                    uint32_t lsb = ((instruction >> 12) & 0x7) << 2 | ((instruction >> 6) & 0x3);
+                    uint32_t widthm1 = (instruction >> 16) & 0x1F;  // width = widthm1 + 1
+                    fields.imm = (lsb << 8) | (widthm1 + 1);
+                    break;
+                }
+                default:
+                    fields.type = INST_UNKNOWN;
+                    break;
+            }
+            return fields;
+        }
+        
+        // 10 xxxx xxx 1: Branches and miscellaneous control
+        else if (op == 1) {
+            // 按照ARM手册A5-13表格实现分支和杂项控制指令
+            uint32_t op_field = (instruction >> 20) & 0x7F;  // bits 26:20 (op1)
+            uint32_t op1_field = (instruction >> 12) & 0x7;  // bits 14:12 (op)
+            
+            // 按照A5-13表格的op1字段分类
+            if (op1_field == 0x00) {
+                // 0x0 not 111xxxx: Conditional branch
+
+                if ((op_field & 0x38) != 0x38) {
+                    fields.type = INST_T32_B_COND;
+                    fields.cond = (instruction >> 22) & 0xF;  // condition field
+                    int32_t simm = decode_t32_branch_immediate(instruction, false);
+                    fields.imm = static_cast<uint32_t>(simm);
+                    return fields;
+                }
+                // 0x0 0111xxx: Move to Special Register, MSR
+                else if ((op_field & 0x7E) == 0x38) {
+#if HAS_SYSTEM_REGISTERS
+                    fields.type = INST_T32_MSR;
+                    fields.rn = (instruction >> 16) & 0xF;
+                    fields.imm = instruction & 0xFF;
+                    return fields;
+#endif
+                }
+                // 0x0 0111010: Hint instructions
+                else if (op_field == 0x3A) {
+#if HAS_MEMORY_BARRIERS
+                    uint32_t hint_op = (instruction >> 4) & 0xF;  // bits 7:4
+                    switch (hint_op) {
+                        case 0x4: fields.type = INST_T32_SEV; break;
+                        case 0x5: fields.type = INST_T32_SEVL; break;
+                        case 0x6: fields.type = INST_T32_WFE; break;
+                        default:  fields.type = INST_T32_NOP; break;
+                    }
+                    return fields;
+#endif
+                }
+                // 0x0 0111011: Miscellaneous control instructions
+                else if (op_field == 0x3B) {
+#if HAS_MEMORY_BARRIERS
+                    uint32_t misc_op = (instruction >> 4) & 0xF;  // bits 7:4
+                    switch (misc_op) {
+                        case 0x4: fields.type = INST_T32_DSB; break;
+                        case 0x5: fields.type = INST_T32_DMB; break;
+                        case 0x6: fields.type = INST_T32_ISB; break;
+                        default:  fields.type = INST_UNKNOWN; break;
+                    }
+                    fields.imm = instruction & 0xF;  // option field
+                    return fields;
+#endif
+                }
+                // 0x0 011111x: Move from Special Register, MRS
+                else if ((op_field & 0x3E) == 0x3C) {
+#if HAS_SYSTEM_REGISTERS
+                    fields.type = INST_T32_MRS;
+                    fields.rd = (instruction >> 8) & 0xF;
+                    fields.imm = instruction & 0xFF;
+                    return fields;
+#endif
+                }
+            }
+            // 010 0111111: Permanently UNDEFINED
+            else if (op1_field == 0x2 && op_field == 0x7F) {
+                fields.type = INST_UNKNOWN;  // UNDEFINED instruction
+                return fields;
+            }
+            // 0x1 xxxxxxx: Branch
+            else if ((op1_field & 0x5) == 0x1) {
+                fields.type = INST_T32_B;
+                int32_t simm = decode_t32_branch_immediate(instruction, true);
+                fields.imm = static_cast<uint32_t>(simm);
+                return fields;
+            }
+            // 1x1 xxxxxxx: Branch with Link
+            else if ((op1_field & 0x5) == 0x5) {
+                fields.type = INST_T32_BL;
+                int32_t simm = decode_t32_branch_immediate(instruction, true);
+                fields.imm = static_cast<uint32_t>(simm);
+                fields.alu_op = 1;  // Mark as link instruction
+                return fields;
+            }
+        }
+    }
+
+    // =====================================================================
+    // op1 = 11: Store/Load single data item, data processing (register), multiply, coprocessor
+    // =====================================================================
+    else if (op1 == 0x3) {
+        // 11 000x xx0 x: Store single data item  
+        if (((op2 & 0x72) == 0x00) && (op == 0)) {
+            // 按照ARM手册A5-21表格实现存储单个数据项指令
+            uint32_t op1_field = (instruction >> 21) & 0x7;  // bits 23:21 (op1)
+            uint32_t op2_field = (instruction >> 6) & 0x3F;  // bits 11:6 (op2)
+            
+            // 按照A5-21表格的op1和op2字段分类
+            switch (op1_field) {
+                case 0x0: // 000 xxxxxx: Store Register Byte
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 000 0xxxxx: STRB (immediate)
+                        fields.type = INST_T32_STRB_IMM;
+                        fields.rn = (instruction >> 16) & 0xF;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 0;
+                        return fields;
+                    } else {
+                        // 000 1xxxxx: STRB (register)
+                        fields.type = INST_T32_STRB_REG;
+                        fields.rn = (instruction >> 16) & 0xF;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 0;
+                        return fields;
+                    }
+                    break;
+                case 0x1: // 001 xxxxxx: Store Register Halfword
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 001 0xxxxx: STRH (immediate)
+                        fields.type = INST_T32_STRH_IMM;
+                        fields.rn = (instruction >> 16) & 0xF;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 0;
+                        return fields;
+                    } else {
+                        // 001 1xxxxx: STRH (register)
+                        fields.type = INST_T32_STRH_REG;
+                        fields.rn = (instruction >> 16) & 0xF;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 0;
+                        return fields;
+                    }
+                    break;
+                case 0x2: // 010 xxxxxx: Store Register
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 010 0xxxxx: STR (immediate)
+                        fields.type = INST_T32_STR_IMM;
+                        fields.rn = (instruction >> 16) & 0xF;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 0;
+                        return fields;
+                    } else {
+                        // 010 1xxxxx: STR (register)
+                        fields.type = INST_T32_STR_REG;
+                        fields.rn = (instruction >> 16) & 0xF;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 0;
+                        return fields;
+                    }
+                    break;
+                default:
+                    // Other op1 values are UNDEFINED or reserved
+                    fields.type = INST_UNKNOWN;
+                    return fields;
+            }
+        }
+        
+        // 11 00xx 001 x: Load byte, memory hints
+        else if (((op2 & 0x67) == 0x01)) {
+            // 按照ARM手册A5-20表格实现加载字节和内存提示指令
+            uint32_t op1_field = (instruction >> 23) & 0x1;   // bit 23 (op1)
+            uint32_t op2_field = (instruction >> 6) & 0x3F;   // bits 11:6 (op2)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            uint32_t rt = (instruction >> 12) & 0xF;          // bits 15:12 (Rt)
+            
+            // 按照A5-20表格的op1、op2、Rn、Rt字段分类
+            if (op1_field == 0x0) {
+                // 0x xxxxxx not 1111 not 1111: Load Register Byte
+                if (rn != 0xF && rt != 0xF) {
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 0x 0xxxxx not 1111 not 1111: LDRB (immediate)
+                        fields.type = INST_T32_LDRB_IMM;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    } else {
+                        // 0x 1xxxxx not 1111 not 1111: LDRB (register)
+                        fields.type = INST_T32_LDRB_REG;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    }
+                }
+                // 0x xxxxxx 1111 not 1111: Load Register Byte
+                else if (rn == 0xF && rt != 0xF) {
+                    fields.type = INST_T32_LDRB_LIT;  // LDRB (literal)
+                    fields.rd = rt;
+                    fields.imm = instruction & 0xFFF;
+                    bool u_bit = (instruction & 0x00800000) != 0;
+                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // Memory hints when Rt = 1111
+                else if (rt == 0xF) {
+                    if ((op2_field & 0x24) == 0x00) {
+                        // 00 000000 not 1111 1111: Preload Data
+                        if (rn != 0xF) {
+                            fields.type = INST_T32_PLD_IMM;  // PLD (immediate)
+                            fields.rn = rn;
+                            fields.imm = instruction & 0xFFF;
+                            return fields;
+                        } else {
+                            fields.type = INST_T32_PLD_LIT;  // PLD (literal)
+                            fields.imm = instruction & 0xFFF;
+                            bool u_bit = (instruction & 0x00800000) != 0;
+                            if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                            return fields;
+                        }
+                    } else if ((op2_field & 0x20) == 0x20) {
+                        // 00 1xxxxx not 1111 1111: Preload Data
+                        fields.type = INST_T32_PLD_REG;  // PLD (register)
+                        fields.rn = rn;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        return fields;
+                    }
+                }
+            }
+            else if (op1_field == 0x1) {
+                // 1x xxxxxx not 1111 not 1111: Load Register Signed Byte
+                if (rn != 0xF && rt != 0xF) {
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 1x 0xxxxx not 1111 not 1111: LDRSB (immediate)
+                        fields.type = INST_T32_LDRSB_IMM;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    } else {
+                        // 1x 1xxxxx not 1111 not 1111: LDRSB (register)
+                        fields.type = INST_T32_LDRSB_REG;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    }
+                }
+                // 1x xxxxxx 1111 not 1111: Load Register Signed Byte
+                else if (rn == 0xF && rt != 0xF) {
+                    fields.type = INST_T32_LDRSB_LIT;  // LDRSB (literal)
+                    fields.rd = rt;
+                    fields.imm = instruction & 0xFFF;
+                    bool u_bit = (instruction & 0x00800000) != 0;
+                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // Memory hints when Rt = 1111
+                else if (rt == 0xF) {
+                    if ((op2_field & 0x24) == 0x00) {
+                        // 1x 000000 not 1111 1111: Preload Instruction
+                        if (rn != 0xF) {
+                            fields.type = INST_T32_PLI_IMM;  // PLI (immediate)
+                            fields.rn = rn;
+                            fields.imm = instruction & 0xFFF;
+                            return fields;
+                        } else {
+                            fields.type = INST_T32_PLI_LIT;  // PLI (literal)
+                            fields.imm = instruction & 0xFFF;
+                            bool u_bit = (instruction & 0x00800000) != 0;
+                            if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                            return fields;
+                        }
+                    } else if ((op2_field & 0x20) == 0x20) {
+                        // 1x 1xxxxx not 1111 1111: Preload Instruction
+                        fields.type = INST_T32_PLI_REG;  // PLI (register)
+                        fields.rn = rn;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        return fields;
+                    }
+                }
+            }
+        }
+        
+        // 11 00xx 011 x: Load halfword, unallocated memory hints
+        else if (((op2 & 0x67) == 0x03)) {
+            // 按照ARM手册A5-19表格实现加载半字和内存提示指令
+            uint32_t op1_field = (instruction >> 23) & 0x1;   // bit 23 (op1)
+            uint32_t op2_field = (instruction >> 6) & 0x3F;   // bits 11:6 (op2)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            uint32_t rt = (instruction >> 12) & 0xF;          // bits 15:12 (Rt)
+            
+            // 按照A5-19表格的op1、op2、Rn、Rt字段分类
+            if (op1_field == 0x0) {
+                // 0x xxxxxx not 1111 not 1111: Load Register Halfword
+                if (rn != 0xF && rt != 0xF) {
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 0x 0xxxxx not 1111 not 1111: LDRH (immediate)
+                        fields.type = INST_T32_LDRH_IMM;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    } else {
+                        // 0x 1xxxxx not 1111 not 1111: LDRH (register)
+                        fields.type = INST_T32_LDRH_REG;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    }
+                }
+                // 0x xxxxxx 1111 not 1111: Load Register Halfword
+                else if (rn == 0xF && rt != 0xF) {
+                    fields.type = INST_T32_LDRH_LIT;  // LDRH (literal)
+                    fields.rd = rt;
+                    fields.imm = instruction & 0xFFF;
+                    bool u_bit = (instruction & 0x00800000) != 0;
+                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // Unallocated memory hints when Rt = 1111
+                else if (rt == 0xF) {
+                    // 00 xxxxxx not 1111 1111: Unallocated memory hint, treat as NOP
+                    fields.type = INST_T32_NOP;  // Unallocated memory hint
+                    return fields;
+                }
+            }
+            else if (op1_field == 0x1) {
+                // 1x xxxxxx not 1111 not 1111: Load Register Signed Halfword
+                if (rn != 0xF && rt != 0xF) {
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 1x 0xxxxx not 1111 not 1111: LDRSH (immediate)
+                        fields.type = INST_T32_LDRSH_IMM;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    } else {
+                        // 1x 1xxxxx not 1111 not 1111: LDRSH (register)
+                        fields.type = INST_T32_LDRSH_REG;
+                        fields.rn = rn;
+                        fields.rd = rt;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    }
+                }
+                // 1x xxxxxx 1111 not 1111: Load Register Signed Halfword
+                else if (rn == 0xF && rt != 0xF) {
+                    fields.type = INST_T32_LDRSH_LIT;  // LDRSH (literal)
+                    fields.rd = rt;
+                    fields.imm = instruction & 0xFFF;
+                    bool u_bit = (instruction & 0x00800000) != 0;
+                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // Load Register Signed Halfword Unprivileged when specific conditions
+                else if (rn != 0xF && rt != 0xF && (op2_field & 0x38) == 0x30) {
+                    // 10 110xxx not 1111 not 1111: LDRSHT
+                    fields.type = INST_T32_LDRSHT;
+                    fields.rn = rn;
+                    fields.rd = rt;
+                    fields.imm = instruction & 0xFF;  // 8-bit immediate
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // Unallocated memory hints when Rt = 1111
+                else if (rt == 0xF) {
+                    // 1x xxxxxx not 1111 1111: Unallocated memory hint, treat as NOP
+                    fields.type = INST_T32_NOP;  // Unallocated memory hint
+                    return fields;
+                }
+                // UNPREDICTABLE cases
+                else {
+                    fields.type = INST_UNKNOWN;  // UNPREDICTABLE
+                    return fields;
+                }
+            }
+        }
+        
+        // 11 00xx 101 x: Load word
+        else if (((op2 & 0x67) == 0x05)) {
+            // 按照ARM手册A5-18表格实现加载字指令
+            uint32_t op1_field = (instruction >> 23) & 0x1;   // bit 23 (op1)
+            uint32_t op2_field = (instruction >> 6) & 0x3F;   // bits 11:6 (op2)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            
+            // 按照A5-18表格的op1、op2、Rn字段分类
+            if (op1_field == 0x0) {
+                // 01 xxxxxx not 1111: Load Register
+                if (rn != 0xF) {
+                    if ((op2_field & 0x20) == 0x00) {
+                        // 00 0xxxxx not 1111: LDR (immediate)
+                        fields.type = INST_T32_LDR_IMM;
+                        fields.rn = rn;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.imm = instruction & 0xFFF;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    } else if ((op2_field & 0x38) == 0x20) {
+                        // 00 1xxxxx not 1111: LDR (register)
+                        fields.type = INST_T32_LDR_REG;
+                        fields.rn = rn;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        fields.load_store_bit = 1;
+                        return fields;
+                    } else if ((op2_field & 0x38) == 0x30) {
+                        // 00 110xxx not 1111: Load Register Unprivileged (LDRT)
+                        fields.type = INST_T32_LDRT;
+                        fields.rn = rn;
+                        fields.rd = (instruction >> 12) & 0xF;
+                        fields.imm = instruction & 0xFF;  // 8-bit immediate
+                        fields.load_store_bit = 1;
+                        return fields;
+                    }
+                }
+                // 0x xxxxxx 1111: Load Register (literal)
+                else if (rn == 0xF) {
+                    fields.type = INST_T32_LDR_LIT;  // LDR (literal)
+                    fields.rd = (instruction >> 12) & 0xF;
+                    fields.imm = instruction & 0xFFF;
+                    bool u_bit = (instruction & 0x00800000) != 0;
+                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+            }
+            // op1 = 1x is UNDEFINED according to the table
+            else {
+                fields.type = INST_UNKNOWN;  // UNDEFINED
+                return fields;
+            }
+        }
+        
+        // 11 00xx 111 x: UNDEFINED
+        else if (((op2 & 0x67) == 0x07)) {
+            // UNDEFINED
+        }
+        
+        // 11 010x xxx x: Data processing (register)
+        else if (((op2 & 0x70) == 0x20)) {
+            // 按照ARM手册A5-24表格实现数据处理(寄存器)指令
+            uint32_t op1_field = (instruction >> 20) & 0xF;   // bits 23:20 (op1)
+            uint32_t op2_field = (instruction >> 4) & 0xF;    // bits 7:4 (op2)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            
+            // 按照A5-24表格的op1和op2字段分类
+            switch (op1_field) {
+                case 0x0: // 000x
+                    switch (op2_field) {
+                        case 0x0: // 0000: Logical Shift Left
+                            fields.type = INST_T32_LSL_REG;
+                            fields.rn = (instruction >> 16) & 0xF;  // Rm (source)
+                            fields.rd = (instruction >> 8) & 0xF;   // Rd
+                            fields.rm = instruction & 0xF;          // Rs (shift amount)
+                            fields.s_bit = (instruction & 0x00100000) != 0;
+                            if (fields.s_bit) fields.type = INST_T32_LSLS_REG;
+                            return fields;
+                        case 0x1: // 0001: Logical Shift Right
+                            fields.type = INST_T32_LSR_REG;
+                            fields.rn = (instruction >> 16) & 0xF;  // Rm (source)
+                            fields.rd = (instruction >> 8) & 0xF;   // Rd
+                            fields.rm = instruction & 0xF;          // Rs (shift amount)
+                            fields.s_bit = (instruction & 0x00100000) != 0;
+                            if (fields.s_bit) fields.type = INST_T32_LSRS_REG;
+                            return fields;
+                        case 0x2: // 0010: Arithmetic Shift Right
+                            fields.type = INST_T32_ASR_REG;
+                            fields.rn = (instruction >> 16) & 0xF;  // Rm (source)
+                            fields.rd = (instruction >> 8) & 0xF;   // Rd
+                            fields.rm = instruction & 0xF;          // Rs (shift amount)
+                            fields.s_bit = (instruction & 0x00100000) != 0;
+                            if (fields.s_bit) fields.type = INST_T32_ASRS_REG;
+                            return fields;
+                        case 0x3: // 0011: Rotate Right
+                            fields.type = INST_T32_ROR_REG;
+                            fields.rn = (instruction >> 16) & 0xF;  // Rm (source)
+                            fields.rd = (instruction >> 8) & 0xF;   // Rd
+                            fields.rm = instruction & 0xF;          // Rs (shift amount)
+                            fields.s_bit = (instruction & 0x00100000) != 0;
+                            if (fields.s_bit) fields.type = INST_T32_RORS_REG;
+                            return fields;
+                        case 0x8: // 1xxx: Signed Extend and Add Halfword
+                            if (rn != 0xF) {
+                                fields.type = INST_T32_SXTAH;
+                                fields.rn = rn;
+                                fields.rd = (instruction >> 8) & 0xF;
+                                fields.rm = instruction & 0xF;
+                                fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                                return fields;
+                            } else {
+                                // 1111: Signed Extend Halfword
+                                fields.type = INST_T32_SXTH;
+                                fields.rd = (instruction >> 8) & 0xF;
+                                fields.rm = instruction & 0xF;
+                                fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                                return fields;
+                            }
+                        default:
+                            fields.type = INST_UNKNOWN;
+                            return fields;
+                    }
+                    break;
+                case 0x1: // 0001
+                    if (op2_field == 0x8) {
+                        // 1xxx: Unsigned Extend and Add Halfword
+                        if (rn != 0xF) {
+                            fields.type = INST_T32_UXTAH;
+                            fields.rn = rn;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        } else {
+                            // 1111: Unsigned Extend Halfword
+                            fields.type = INST_T32_UXTH;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x2: // 0010
+                    if (op2_field == 0x8) {
+                        // 1xxx: Signed Extend and Add Byte 16
+                        if (rn != 0xF) {
+                            fields.type = INST_T32_SXTAB16;
+                            fields.rn = rn;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        } else {
+                            // 1111: Signed Extend Byte 16
+                            fields.type = INST_T32_SXTB16;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x3: // 0011
+                    if (op2_field == 0x8) {
+                        // 1xxx: Unsigned Extend and Add Byte 16
+                        if (rn != 0xF) {
+                            fields.type = INST_T32_UXTAB16;
+                            fields.rn = rn;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        } else {
+                            // 1111: Unsigned Extend Byte 16
+                            fields.type = INST_T32_UXTB16;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x4: // 0100
+                    if (op2_field == 0x8) {
+                        // 1xxx: Signed Extend and Add Byte
+                        if (rn != 0xF) {
+                            fields.type = INST_T32_SXTAB;
+                            fields.rn = rn;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        } else {
+                            // 1111: Signed Extend Byte
+                            fields.type = INST_T32_SXTB;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x5: // 0101
+                    if (op2_field == 0x8) {
+                        // 1xxx: Unsigned Extend and Add Byte
+                        if (rn != 0xF) {
+                            fields.type = INST_T32_UXTAB;
+                            fields.rn = rn;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        } else {
+                            // 1111: Unsigned Extend Byte
+                            fields.type = INST_T32_UXTB;
+                            fields.rd = (instruction >> 8) & 0xF;
+                            fields.rm = instruction & 0xF;
+                            fields.shift_amount = ((instruction >> 4) & 0x3) * 8;  // rotation
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x8: // 1000
+                case 0x9: // 1001
+                case 0xA: // 1010
+                case 0xB: // 1011
+                    // Parallel addition and subtraction, signed/unsigned
+                    // Note: These are complex SIMD operations that may need detailed implementation
+                    fields.type = INST_T32_PARALLEL_ARITH;
+                    fields.rn = rn;
+                    fields.rd = (instruction >> 8) & 0xF;
+                    fields.rm = instruction & 0xF;
+                    fields.imm = (op1_field << 4) | op2_field;  // Encode operation type
+                    return fields;
+                default:
+                    fields.type = INST_UNKNOWN;
+                    return fields;
+            }
+        }
+        
+        // 11 0110 xxx x: Multiply, and multiply accumulate - ARM manual direct parsing
+        else if (((op2 & 0x78) == 0x30)) {
+#if HAS_MULTIPLY_INSTRUCTIONS
+            // 按照ARM手册A5-28表格实现乘法和乘法累加指令
+            uint32_t op1_field = (instruction >> 20) & 0x7;   // bits 22:20 (op1)
+            uint32_t op2_field = (instruction >> 4) & 0x3;    // bits 5:4 (op2)
+            uint32_t ra = (instruction >> 12) & 0xF;          // bits 15:12 (Ra)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            uint32_t rd = (instruction >> 8) & 0xF;           // bits 11:8 (Rd)
+            uint32_t rm = instruction & 0xF;                  // bits 3:0 (Rm)
+            
+            // 按照A5-28表格的op1、op2、Ra字段分类
+            switch (op1_field) {
+                case 0x0: // 000
+                    switch (op2_field) {
+                        case 0x0: // 00
+                            if (ra != 0xF) {
+                                // 000 00 not 1111: Multiply Accumulate
+                                fields.type = INST_T32_MLA;
+                                fields.rd = rd;
+                                fields.rn = rn;
+                                fields.rm = rm;
+                                fields.rs = ra;
+                                return fields;
+                            } else {
+                                // 000 00 1111: Multiply
+                                fields.type = INST_T32_MUL;
+                                fields.rd = rd;
+                                fields.rn = rn;
+                                fields.rm = rm;
+                                return fields;
+                            }
+                        case 0x1: // 01
+                            // 000 01 -: Multiply and Subtract
+                            fields.type = INST_T32_MLS;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.rs = ra;
+                            return fields;
+                        default:
+                            fields.type = INST_UNKNOWN;
+                            return fields;
+                    }
+                    break;
+                case 0x1: // 001
+                    if (op2_field == 0x0) {
+                        if (ra != 0xF) {
+                            // 001 - not 1111: Signed Multiply Accumulate, Halfwords
+                            fields.type = INST_T32_SMLABB; // Base type, specific variant determined by op2 bits
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.rs = ra;
+                            fields.imm = (instruction >> 4) & 0x3; // M, N bits for halfword selection
+                            return fields;
+                        } else {
+                            // 001 - 1111: Signed Multiply, Halfwords
+                            fields.type = INST_T32_SMULBB; // Base type, specific variant determined by op2 bits
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.imm = (instruction >> 4) & 0x3; // M, N bits for halfword selection
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x2: // 010
+                    if (op2_field == 0x0) {
+                        if (ra != 0xF) {
+                            // 010 0x not 1111: Signed Multiply Accumulate Dual
+                            fields.type = INST_T32_SMLAD;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.rs = ra;
+                            fields.imm = (instruction >> 4) & 0x1; // M bit
+                            return fields;
+                        } else {
+                            // 010 0x 1111: Signed Dual Multiply Add
+                            fields.type = INST_T32_SMUAD;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.imm = (instruction >> 4) & 0x1; // M bit
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x3: // 011
+                    if (op2_field == 0x0) {
+                        if (ra != 0xF) {
+                            // 011 0x not 1111: Signed Multiply Accumulate, Word by halfword
+                            fields.type = INST_T32_SMLAWB;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.rs = ra;
+                            fields.imm = (instruction >> 4) & 0x1; // M bit
+                            return fields;
+                        } else {
+                            // 011 0x 1111: Signed Multiply, Word by halfword
+                            fields.type = INST_T32_SMULWB;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.imm = (instruction >> 4) & 0x1; // M bit
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x4: // 100
+                    if (op2_field == 0x0) {
+                        if (ra != 0xF) {
+                            // 100 0x not 1111: Signed Multiply Subtract Dual
+                            fields.type = INST_T32_SMLSD;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.rs = ra;
+                            fields.imm = (instruction >> 4) & 0x1; // M bit
+                            return fields;
+                        } else {
+                            // 100 0x 1111: Signed Dual Multiply Subtract
+                            fields.type = INST_T32_SMUSD;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.imm = (instruction >> 4) & 0x1; // M bit
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x5: // 101
+                    if (op2_field == 0x0) {
+                        if (ra != 0xF) {
+                            // 101 0x not 1111: Signed Most Significant Word Multiply Accumulate
+                            fields.type = INST_T32_SMMLA;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.rs = ra;
+                            fields.imm = (instruction >> 4) & 0x1; // R bit (rounding)
+                            return fields;
+                        } else {
+                            // 101 0x 1111: Signed Most Significant Word Multiply
+                            fields.type = INST_T32_SMMUL;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.imm = (instruction >> 4) & 0x1; // R bit (rounding)
+                            return fields;
+                        }
+                    }
+                    break;
+                case 0x6: // 110
+                    if (op2_field == 0x0) {
+                        // 110 0x -: Signed Most Significant Word Multiply Subtract
+                        fields.type = INST_T32_SMMLS;
+                        fields.rd = rd;
+                        fields.rn = rn;
+                        fields.rm = rm;
+                        fields.rs = ra;
+                        fields.imm = (instruction >> 4) & 0x1; // R bit (rounding)
+                        return fields;
+                    }
+                    break;
+                case 0x7: // 111
+                    if (op2_field == 0x0) {
+                        if (ra == 0xF) {
+                            // 111 00 1111: Unsigned Sum of Absolute Differences, Accumulate
+                            fields.type = INST_T32_USADA8;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            fields.rs = ra;
+                            return fields;
+                        } else {
+                            // 111 00 not 1111: Unsigned Sum of Absolute Differences
+                            fields.type = INST_T32_USAD8;
+                            fields.rd = rd;
+                            fields.rn = rn;
+                            fields.rm = rm;
+                            return fields;
+                        }
+                    }
+                    break;
+                default:
+                    fields.type = INST_UNKNOWN;
+                    return fields;
+            }
+            
+            // Default fallback for unrecognized patterns
+            fields.type = INST_UNKNOWN;
+            return fields;
+#endif
+        }
+        
+        // 11 0111 xxx x: Long multiply, long multiply accumulate, and divide
+        else if (((op2 & 0x78) == 0x38)) {
+            // 按照ARM手册A5-29表格实现长乘法、长乘法累加和除法指令
+            uint32_t op1_field = (instruction >> 20) & 0x7;   // bits 22:20 (op1)
+            uint32_t op2_field = (instruction >> 4) & 0xF;    // bits 7:4 (op2)
+            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            uint32_t rdlo = (instruction >> 12) & 0xF;        // bits 15:12 (RdLo)
+            uint32_t rdhi = (instruction >> 8) & 0xF;         // bits 11:8 (RdHi)
+            uint32_t rm = instruction & 0xF;                  // bits 3:0 (Rm)
+            
+            // 按照A5-29表格的op1和op2字段分类
+            switch (op1_field) {
+                case 0x0: // 000
+                    switch (op2_field) {
+                        case 0x0: // 0000: Signed Multiply Long
+                            fields.type = INST_T32_SMULL;
+                            fields.rd = rdlo;   // RdLo
+                            fields.rs = rdhi;   // RdHi
+                            fields.rn = rn;     // Rn
+                            fields.rm = rm;     // Rm
+                            return fields;
+                        case 0xF: // 1111: Signed Divide
+#if HAS_HARDWARE_DIVIDE
+                            fields.type = INST_T32_SDIV;
+                            fields.rd = rdhi;   // Rd (result in RdHi field)
+                            fields.rn = rn;     // Rn (dividend)
+                            fields.rm = rm;     // Rm (divisor)
+                            return fields;
+#endif
+                            break;
+                        default:
+                            fields.type = INST_UNKNOWN;
+                            return fields;
+                    }
+                    break;
+                case 0x1: // 001
+                    if (op2_field == 0xF) {
+                        // 001 1111: Unsigned Divide
+#if HAS_HARDWARE_DIVIDE
+                        fields.type = INST_T32_UDIV;
+                        fields.rd = rdhi;   // Rd (result in RdHi field)
+                        fields.rn = rn;     // Rn (dividend)
+                        fields.rm = rm;     // Rm (divisor)
+                        return fields;
+#endif
+                    }
+                    break;
+                case 0x2: // 010
+                    if (op2_field == 0x0) {
+                        // 010 0000: Unsigned Multiply Long
+                        fields.type = INST_T32_UMULL;
+                        fields.rd = rdlo;   // RdLo
+                        fields.rs = rdhi;   // RdHi
+                        fields.rn = rn;     // Rn
+                        fields.rm = rm;     // Rm
+                        return fields;
+                    }
+                    break;
+                case 0x4: // 100
+                    switch (op2_field) {
+                        case 0x0: // 0000: Signed Multiply Accumulate Long
+                            fields.type = INST_T32_SMLAL;
+                            fields.rd = rdlo;   // RdLo
+                            fields.rs = rdhi;   // RdHi
+                            fields.rn = rn;     // Rn
+                            fields.rm = rm;     // Rm
+                            return fields;
+                        case 0x8: // 10xx: Signed Multiply Accumulate Long, Halfwords (SMLALBB family)
+                        case 0x9:
+                        case 0xA:
+                        case 0xB:
+#if HAS_MULTIPLY_INSTRUCTIONS
+                            fields.type = INST_T32_SMLALBB; // Base type, specific variant in imm field
+                            fields.rd = rdlo;   // RdLo
+                            fields.rs = rdhi;   // RdHi
+                            fields.rn = rn;     // Rn
+                            fields.rm = rm;     // Rm
+                            fields.imm = op2_field & 0x3; // M, N bits for halfword selection
+                            return fields;
+#endif
+                            break;
+                        case 0xC: // 110x: Signed Multiply Accumulate Long Dual (SMLALD family)
+                        case 0xD:
+#if HAS_MULTIPLY_INSTRUCTIONS
+                            fields.type = INST_T32_SMLALD;
+                            fields.rd = rdlo;   // RdLo
+                            fields.rs = rdhi;   // RdHi
+                            fields.rn = rn;     // Rn
+                            fields.rm = rm;     // Rm
+                            fields.imm = op2_field & 0x1; // M bit
+                            return fields;
+#endif
+                            break;
+                        default:
+                            fields.type = INST_UNKNOWN;
+                            return fields;
+                    }
+                    break;
+                case 0x5: // 101
+                    if ((op2_field & 0xE) == 0xC) {
+                        // 101 110x: Signed Multiply Subtract Long Dual (SMLSLD family)
+#if HAS_MULTIPLY_INSTRUCTIONS
+                        fields.type = INST_T32_SMLSLD;
+                        fields.rd = rdlo;   // RdLo
+                        fields.rs = rdhi;   // RdHi
+                        fields.rn = rn;     // Rn
+                        fields.rm = rm;     // Rm
+                        fields.imm = op2_field & 0x1; // M bit
+                        return fields;
+#endif
+                    }
+                    break;
+                case 0x6: // 110
+                    switch (op2_field) {
+                        case 0x0: // 0000: Unsigned Multiply Accumulate Long
+                            fields.type = INST_T32_UMLAL;
+                            fields.rd = rdlo;   // RdLo
+                            fields.rs = rdhi;   // RdHi
+                            fields.rn = rn;     // Rn
+                            fields.rm = rm;     // Rm
+                            return fields;
+                        case 0x6: // 0110: Unsigned Multiply Accumulate Accumulate Long
+#if HAS_MULTIPLY_INSTRUCTIONS
+                            fields.type = INST_T32_UMAAL;
+                            fields.rd = rdlo;   // RdLo
+                            fields.rs = rdhi;   // RdHi
+                            fields.rn = rn;     // Rn
+                            fields.rm = rm;     // Rm
+                            return fields;
+#endif
+                            break;
+                        default:
+                            fields.type = INST_UNKNOWN;
+                            return fields;
+                    }
+                    break;
+                default:
+                    fields.type = INST_UNKNOWN;
+                    return fields;
+            }
+            
+            // Default fallback for unrecognized patterns
+            fields.type = INST_UNKNOWN;
+            return fields;
+        }
+        
+        // 11 1xxx xxx x: Coprocessor instructions
+        else if ((op2 & 0x40) == 0x40) {
+            // 按照ARM手册A5-30表格实现协处理器指令
+            uint32_t op1_field = (instruction >> 20) & 0x3F;  // bits 25:20 (op1)
+            uint32_t op_field = (instruction >> 4) & 0x1;     // bit 4 (op)
+            uint32_t coproc = (instruction >> 8) & 0xF;       // bits 11:8 (coproc)
+            
+            // 按照A5-30表格的op1、op、coproc字段分类
+            if ((op1_field & 0x30) == 0x00) {
+                // 0xxxxx: Store Coprocessor / Load Coprocessor
+                if (op_field == 0) {
+                    // 0xxxxx x xxxx: Store Coprocessor
+#if HAS_COPROCESSOR_SUPPORT
+                    fields.type = INST_T32_STC;
+                    fields.coproc = coproc;
+                    fields.rn = (instruction >> 16) & 0xF;     // Rn
+                    fields.rd = (instruction >> 12) & 0xF;     // CRd
+                    fields.imm = (instruction & 0xFF) << 2;    // imm8 << 2
+                    fields.load_store_bit = 0;                 // Store
+                    return fields;
+#endif
+                } else {
+                    // 0xxxxx x xxxx: Load Coprocessor
+#if HAS_COPROCESSOR_SUPPORT
+                    fields.type = INST_T32_LDC;
+                    fields.coproc = coproc;
+                    fields.rn = (instruction >> 16) & 0xF;     // Rn
+                    fields.rd = (instruction >> 12) & 0xF;     // CRd
+                    fields.imm = (instruction & 0xFF) << 2;    // imm8 << 2
+                    fields.load_store_bit = 1;                 // Load
+                    return fields;
+#endif
+                }
+            }
+            else if ((op1_field & 0x3E) == 0x20) {
+                // 100xxx: Move to Coprocessor from two Arm core registers
+                if (op_field == 0) {
+#if HAS_COPROCESSOR_SUPPORT
+                    fields.type = INST_T32_MCRR;
+                    fields.coproc = coproc;
+                    fields.rn = (instruction >> 16) & 0xF;     // Rt
+                    fields.rd = (instruction >> 12) & 0xF;     // Rt2
+                    fields.rm = (instruction >> 4) & 0xF;      // opc1
+                    fields.rs = instruction & 0xF;             // CRm
+                    return fields;
+#endif
+                }
+            }
+            else if ((op1_field & 0x3E) == 0x22) {
+                // 100xx1: Move to two Arm core registers from Coprocessor
+                if (op_field == 0) {
+#if HAS_COPROCESSOR_SUPPORT
+                    fields.type = INST_T32_MRRC;
+                    fields.coproc = coproc;
+                    fields.rn = (instruction >> 16) & 0xF;     // Rt
+                    fields.rd = (instruction >> 12) & 0xF;     // Rt2
+                    fields.rm = (instruction >> 4) & 0xF;      // opc1
+                    fields.rs = instruction & 0xF;             // CRm
+                    return fields;
+#endif
+                }
+            }
+            else if ((op1_field & 0x30) == 0x20) {
+                // 10xxxx: Coprocessor data operations
+                if (op_field == 0) {
+#if HAS_COPROCESSOR_SUPPORT
+                    fields.type = INST_T32_CDP;
+                    fields.coproc = coproc;
+                    fields.rn = (instruction >> 16) & 0xF;     // CRn
+                    fields.rd = (instruction >> 12) & 0xF;     // CRd
+                    fields.rm = instruction & 0xF;             // CRm
+                    fields.rs = (instruction >> 21) & 0xF;     // opc1
+                    fields.imm = (instruction >> 5) & 0x7;     // opc2
+                    return fields;
+#endif
+                }
+            }
+            else if ((op1_field & 0x31) == 0x20) {
+                // 10xxx0: Move to Coprocessor from Arm core register
+                if (op_field == 1) {
+#if HAS_COPROCESSOR_SUPPORT
+                    fields.type = INST_T32_MCR;
+                    fields.coproc = coproc;
+                    fields.rn = (instruction >> 12) & 0xF;     // Rt
+                    fields.rd = (instruction >> 16) & 0xF;     // CRn
+                    fields.rm = instruction & 0xF;             // CRm
+                    fields.rs = (instruction >> 21) & 0x7;     // opc1
+                    fields.imm = (instruction >> 5) & 0x7;     // opc2
+                    return fields;
+#endif
+                }
+            }
+            else if ((op1_field & 0x31) == 0x21) {
+                // 10xxx1: Move to Arm core register from Coprocessor
+                if (op_field == 1) {
+#if HAS_COPROCESSOR_SUPPORT
+                    fields.type = INST_T32_MRC;
+                    fields.coproc = coproc;
+                    fields.rn = (instruction >> 12) & 0xF;     // Rt
+                    fields.rd = (instruction >> 16) & 0xF;     // CRn
+                    fields.rm = instruction & 0xF;             // CRm
+                    fields.rs = (instruction >> 21) & 0x7;     // opc1
+                    fields.imm = (instruction >> 5) & 0x7;     // opc2
+                    return fields;
+#endif
+                }
+            }
+            
+            // Coprocessor instructions not supported in Cortex-M or unrecognized pattern
+            fields.type = INST_UNKNOWN;
+            return fields;
+        }
+        
+        // Handle Pre/Post indexing forms for load/store
+        if ((instruction & 0xFF000000) == 0xF8000000 || (instruction & 0xFF000000) == 0xF8100000 ||
+            (instruction & 0xFF000000) == 0xF8200000 || (instruction & 0xFF000000) == 0xF8300000 ||
+            (instruction & 0xFF000000) == 0xF8400000 || (instruction & 0xFF000000) == 0xF8500000) {
+            bool is_load = (instruction & 0x00100000) != 0;
+            bool is_byte = ((instruction & 0xFF000000) == 0xF8000000) || ((instruction & 0xFF000000) == 0xF8100000);
+            uint32_t rn = (instruction >> 16) & 0xF;
+            uint32_t rt = (instruction >> 12) & 0xF;
+            uint32_t imm8 = instruction & 0xFF;
+            bool has_index_bits = (instruction & 0x0800) != 0;
+            if (has_index_bits) {
+                bool p = (instruction & 0x0400) != 0;
+                bool u = (instruction & 0x0200) != 0;
+                bool w = (instruction & 0x0100) != 0;
+                if (decode_t32_indexed_addressing(instruction, fields, is_load, is_byte, rn, rt, imm8, p, u, w)) return fields;
+            } else {
+                if (decode_t32_indexed_addressing(instruction, fields, is_load, is_byte, rn, rt, imm8, false, false, false)) return fields;
+            }
+        }
+    }
+    
+    // Default fallback for unrecognized instructions
+    fields.type = INST_UNKNOWN;
+    return fields;
+}
+
+bool Instruction::is_32bit_instruction(uint32_t instruction)
+{
+    // Check if this is a 32-bit Thumb-2 instruction
+    uint16_t first_half = (uint16_t)(instruction & 0xFFFF);
+    
+    // 32-bit instructions start with specific bit patterns in first halfword:
+    // 11101 - Load/Store multiple, Load/Store dual, Table branch, etc.
+    // 11110 - BL and other T32 instructions  
+    // 11111 - More T32 instructions
+    return ((first_half & 0xF800) == 0xE800) || 
+           ((first_half & 0xF800) == 0xF000) || 
+           ((first_half & 0xF800) == 0xF800);
 }

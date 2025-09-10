@@ -19,16 +19,26 @@ static std::string hex32(uint32_t v) {
     return oss.str();
 }
 
+// Helper function to read register with PC adjustment for T32 instructions
+static uint32_t read_register_with_pc_adjust(Registers* registers, uint8_t reg_num) {
+    if (reg_num == 15) {
+        // PC reads as current instruction address + 4 for T32 instructions
+        return registers->read_register(reg_num) + 4;
+    } else {
+        return registers->read_register(reg_num);
+    }
+}
+
 // Get register name with special names for sp, lr, pc
 static std::string reg_name(uint8_t reg) {
     switch (reg) {
+        case 10: return "sl"; // R10 is also called SL (Stack Limit)
+        case 11: return "fp"; // R11 is also called FP (Frame Pointer)
+        case 12: return "ip"; // R12 is also called IP (Intra-Procedure-call scratch register)
         case 13: return "sp";
         case 14: return "lr"; 
         case 15: return "pc";
         default: 
-            if (reg == 10) return "sl"; // R10 is also called SL (Stack Limit)
-            if (reg == 11) return "fp"; // R11 is also called FP (Frame Pointer)
-            if (reg == 12) return "ip"; // R12 is also called IP (Intra-Procedure-call scratch register)
             return "r" + std::to_string(reg);
     }
 }
@@ -373,11 +383,7 @@ static std::string format_instruction(const InstructionFields& fields) {
 
         // T16 Branch Instructions  
         case INST_T16_B_COND: {
-            static const char* cond_names[] = {
-                "eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
-                "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"
-            };
-            oss << "b" << cond_names[fields.cond] << "\t#" << (int32_t)fields.imm;
+            oss << "b" << cond_suffix[fields.cond] << "\t#" << (int32_t)fields.imm;
             break;
         }
         case INST_T16_B:
@@ -400,6 +406,9 @@ static std::string format_instruction(const InstructionFields& fields) {
         case INST_T32_MOV_IMM:
             oss << "mov.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", #" << fields.imm;
             break;
+        case INST_T32_MOVS_IMM:
+            oss << "movs.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", #" << fields.imm;
+            break;
         case INST_T32_MVN_IMM:
             oss << "mvn.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", #" << fields.imm;
             break;
@@ -408,6 +417,18 @@ static std::string format_instruction(const InstructionFields& fields) {
             break;
         case INST_T32_SUB_IMM:
             oss << "sub.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
+            break;
+        case INST_T32_ADDW:
+            oss << "addw\tr" << (int)fields.rd << ", " << (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) << ", #" << fields.imm;
+            break;
+        case INST_T32_SUBW:
+            oss << "subw\tr" << (int)fields.rd << ", " << (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) << ", #" << fields.imm;
+            break;
+        case INST_T32_MOVW:
+            oss << "movw\tr" << (int)fields.rd << ", #" << fields.imm;
+            break;
+        case INST_T32_MOVT:
+            oss << "movt\tr" << (int)fields.rd << ", #" << fields.imm;
             break;
         case INST_T32_ADC_IMM:
             oss << "adc.w" << cond_suffix(fields.cond) << "\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << fields.imm;
@@ -645,6 +666,9 @@ static std::string format_instruction(const InstructionFields& fields) {
         case INST_T32_SDIV:
             oss << "sdiv\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
             break;
+        case INST_T32_MUL:
+            oss << "mul.w\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm;
+            break;
         case INST_T32_MLA:
             oss << "mla\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", r" << (int)fields.rm << ", r" << (int)fields.rs;
             break;
@@ -764,9 +788,7 @@ static std::string format_instruction(const InstructionFields& fields) {
                 oss << ch;
             }
 
-            const char* cond_names[] = {"eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
-                                       "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"};
-            oss << "\t" << cond_names[firstcond];
+            oss << "\t" << cond_suffix[firstcond];
             break;
         }
 #endif
@@ -818,6 +840,50 @@ static std::string format_instruction(const InstructionFields& fields) {
         }
 #endif
 
+#if HAS_BITFIELD_INSTRUCTIONS
+        // T32 Bitfield Instructions
+        case INST_T32_BFI: {
+            uint32_t lsb = fields.imm & 0xFF;        // bits [7:0]
+            uint32_t msb = (fields.imm >> 8) & 0xFF; // bits [15:8]  
+            uint32_t width = msb - lsb + 1;
+            oss << "bfi\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << lsb << ", #" << width;
+            break;
+        }
+        case INST_T32_BFC: {
+            uint32_t lsb = fields.imm & 0xFF;        // bits [7:0]
+            uint32_t msb = (fields.imm >> 8) & 0xFF; // bits [15:8]
+            uint32_t width = msb - lsb + 1;
+            oss << "bfc\tr" << (int)fields.rd << ", #" << lsb << ", #" << width;
+            break;
+        }
+        case INST_T32_UBFX: {
+            uint32_t lsb = fields.imm & 0xFF;         // bits [7:0]
+            uint32_t width = (fields.imm >> 8) & 0xFF; // bits [15:8]
+            oss << "ubfx\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << lsb << ", #" << width;
+            break;
+        }
+        case INST_T32_SBFX: {
+            uint32_t lsb = fields.imm & 0xFF;         // bits [7:0]
+            uint32_t width = (fields.imm >> 8) & 0xFF; // bits [15:8]
+            oss << "sbfx\tr" << (int)fields.rd << ", r" << (int)fields.rn << ", #" << lsb << ", #" << width;
+            break;
+        }
+        
+        // Sign/Zero Extend Instructions
+        case INST_T32_SXTH:
+            oss << "sxth.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            break;
+        case INST_T32_SXTB:
+            oss << "sxtb.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            break;
+        case INST_T32_UXTH:
+            oss << "uxth.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            break;
+        case INST_T32_UXTB:
+            oss << "uxtb.w\tr" << (int)fields.rd << ", r" << (int)fields.rn;
+            break;
+#endif
+
         default:
             oss << "unknown\t(type=" << fields.type << ")";
             break;
@@ -840,9 +906,12 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
     bool should_execute = true;
     if (m_registers->in_it_block() && fields.type != INST_T16_IT) {
         // Determine if this instruction should execute based on IT condition & T/E slot
+        // NOTE: Condition is evaluated once when IT block starts, not per instruction
         uint8_t it_condition = m_registers->get_it_firstcond();
         bool then_slot = m_registers->current_it_then();
-        bool cond_ok = check_condition(it_condition);
+        
+        // Get the condition result that was saved when IT block started
+        bool cond_ok = m_registers->get_it_condition_result();
         should_execute = then_slot ? cond_ok : !cond_ok;
         {
             std::string dbg = std::string("IT: cond=") + std::to_string(it_condition) +
@@ -871,11 +940,12 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         // For 32-bit instructions, print as two 16-bit halfwords
         uint16_t first_half = (fields.opcode >> 16) & 0xFFFF;
         uint16_t second_half = fields.opcode & 0xFFFF;
-        ss << std::hex << second_half << " " << std::hex << first_half << ": ";
+        ss << std::hex << first_half << " " << std::hex << second_half << ": ";
     } else {
         // For 16-bit instructions, print as single halfword
         ss << std::hex << (fields.opcode & 0xFFFF) << ": ";
     }
+
     // Log only when we're going to execute (or if IT not built)
     LOG_DEBUG(ss.str() + format_instruction(fields));
 
@@ -1033,9 +1103,14 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
             break;
         // T32 Data Processing Instructions
         case INST_T32_MOV_IMM:
+        case INST_T32_MOVS_IMM:
         case INST_T32_MVN_IMM:
         case INST_T32_ADD_IMM:
         case INST_T32_SUB_IMM:
+        case INST_T32_ADDW:
+        case INST_T32_SUBW:
+        case INST_T32_MOVW:
+        case INST_T32_MOVT:
         case INST_T32_ADC_IMM:
         case INST_T32_SBC_IMM:
         case INST_T32_RSB_IMM:
@@ -1138,6 +1213,9 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_SDIV:
             pc_changed = execute_divide(fields);
             break;
+        case INST_T32_MUL:
+            pc_changed = execute_mul(fields);
+            break;
         case INST_T32_MLA:
             pc_changed = execute_mla(fields);
             break;
@@ -1157,6 +1235,14 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_UBFX:
         case INST_T32_SBFX:
             pc_changed = execute_bitfield(fields);
+            break;
+            
+        // Sign/Zero Extend Instructions
+        case INST_T32_SXTH:
+        case INST_T32_SXTB:
+        case INST_T32_UXTH:
+        case INST_T32_UXTB:
+            pc_changed = execute_extend(fields);
             break;
 #endif
 #if HAS_SATURATING_ARITHMETIC
@@ -1921,28 +2007,69 @@ void Execute::write_memory(uint32_t address, uint32_t data, uint32_t size, void*
 
 bool Execute::execute_extend(const InstructionFields& fields)
 {
-    uint32_t rm_val = m_registers->read_register(fields.rm);
     uint32_t result = 0;
     
-    switch (fields.alu_op) {
-        case 0: // SXTH - Sign extend halfword (16-bit) to word (32-bit)
-            result = static_cast<int32_t>(static_cast<int16_t>(rm_val & 0xFFFF));
-            break;
-        case 1: // SXTB - Sign extend byte (8-bit) to word (32-bit) 
-            result = static_cast<int32_t>(static_cast<int8_t>(rm_val & 0xFF));
-            break;
-        case 2: // UXTH - Zero extend halfword (16-bit) to word (32-bit)
-            result = rm_val & 0xFFFF;
-            break;
-        case 3: // UXTB - Zero extend byte (8-bit) to word (32-bit)
-            result = rm_val & 0xFF;
-            break;
+    // Check if this is a T32 extend instruction or T16 extend instruction
+    if (fields.type == INST_T32_SXTH || fields.type == INST_T32_SXTB || 
+        fields.type == INST_T32_UXTH || fields.type == INST_T32_UXTB) {
+        // T32 extend instructions use fields.rn as source
+        uint32_t source_value = m_registers->read_register(fields.rn);
+        
+        switch (fields.type) {
+            case INST_T32_SXTH: {
+                // Sign extend halfword (16-bit) to word (32-bit)
+                uint16_t halfword = static_cast<uint16_t>(source_value & 0xFFFF);
+                result = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(halfword)));
+                LOG_DEBUG("SXTH.W: sign extended 0x" + std::to_string(halfword) + " to 0x" + std::to_string(result));
+                break;
+            }
+            
+            case INST_T32_SXTB: {
+                // Sign extend byte (8-bit) to word (32-bit)
+                uint8_t byte = static_cast<uint8_t>(source_value & 0xFF);
+                result = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int8_t>(byte)));
+                LOG_DEBUG("SXTB.W: sign extended 0x" + std::to_string(byte) + " to 0x" + std::to_string(result));
+                break;
+            }
+            
+            case INST_T32_UXTH: {
+                // Zero extend halfword (16-bit) to word (32-bit)
+                result = source_value & 0xFFFF;
+                LOG_DEBUG("UXTH.W: zero extended to 0x" + std::to_string(result));
+                break;
+            }
+            
+            case INST_T32_UXTB: {
+                // Zero extend byte (8-bit) to word (32-bit)
+                result = source_value & 0xFF;
+                LOG_DEBUG("UXTB.W: zero extended to 0x" + std::to_string(result));
+                break;
+            }
+        }
+    } else {
+        // T16 extend instructions use fields.rm as source and fields.alu_op to distinguish
+        uint32_t rm_val = m_registers->read_register(fields.rm);
+        
+        switch (fields.alu_op) {
+            case 0: // SXTH - Sign extend halfword (16-bit) to word (32-bit)
+                result = static_cast<int32_t>(static_cast<int16_t>(rm_val & 0xFFFF));
+                break;
+            case 1: // SXTB - Sign extend byte (8-bit) to word (32-bit) 
+                result = static_cast<int32_t>(static_cast<int8_t>(rm_val & 0xFF));
+                break;
+            case 2: // UXTH - Zero extend halfword (16-bit) to word (32-bit)
+                result = rm_val & 0xFFFF;
+                break;
+            case 3: // UXTB - Zero extend byte (8-bit) to word (32-bit)
+                result = rm_val & 0xFF;
+                break;
+        }
+        
+        LOG_DEBUG("Extend: R" + std::to_string(fields.rd) + " = extend(R" + std::to_string(fields.rm) + 
+                  ") = " + hex32(result));
     }
     
     m_registers->write_register(fields.rd, result);
-    LOG_DEBUG("Extend: R" + std::to_string(fields.rd) + " = extend(R" + std::to_string(fields.rm) + 
-              ") = " + hex32(result));
-    
     return false;
 }
 
@@ -2219,6 +2346,10 @@ bool Execute::execute_it(const InstructionFields& fields)
 
     // Initialize IT state and derived pattern
     m_registers->start_it(static_cast<uint8_t>(firstcond & 0xF), static_cast<uint8_t>(mask & 0xF));
+    
+    // Evaluate condition once at IT block start and store the result
+    bool cond_result = check_condition(firstcond);
+    m_registers->set_it_condition_result(cond_result);
 
     return false;
 }
@@ -2329,8 +2460,22 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
     }
     
     uint32_t operand1 = 0;
-    if (fields.rn != 0) {  // Some instructions like MOV don't use rn
-        operand1 = m_registers->read_register(fields.rn);
+    // Read operand1 (rn) for instructions that need it - most do except MOV/MVN
+    switch (fields.type) {
+        case INST_T32_MOV_IMM:
+        case INST_T32_MOVS_IMM:
+        case INST_T32_MVN_IMM:
+        case INST_T32_MOVW:
+            // These instructions don't use rn
+            break;
+        case INST_T32_MOVT:
+            // MOVT reads the current value of rd, not rn
+            operand1 = m_registers->read_register(fields.rd);
+            break;
+        default:
+            // Most instructions (ADD, SUB, etc.) use rn
+            operand1 = read_register_with_pc_adjust(m_registers, fields.rn);
+            break;
     }
     uint32_t operand2 = fields.imm;
     uint32_t result = 0;
@@ -2341,6 +2486,12 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
         case INST_T32_MOV_IMM:
             result = operand2;
             LOG_DEBUG("MOV.W r" + std::to_string(fields.rd) + ", #" + hex32(operand2) + 
+                     " -> " + hex32(result));
+            break;
+            
+        case INST_T32_MOVS_IMM:
+            result = operand2;
+            LOG_DEBUG("MOVS.W r" + std::to_string(fields.rd) + ", #" + hex32(operand2) + 
                      " -> " + hex32(result));
             break;
             
@@ -2364,6 +2515,37 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             overflow = ((operand1 ^ operand2) & (operand1 ^ result) & 0x80000000) != 0;
             LOG_DEBUG("SUB.W r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
                      ", #" + hex32(operand2) + " -> " + hex32(result));
+            break;
+
+        case INST_T32_ADDW:
+            result = operand1 + operand2;
+            // ADDW doesn't set flags, so no carry/overflow calculation needed
+            LOG_DEBUG("ADDW r" + std::to_string(fields.rd) + ", " + 
+                     (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) + 
+                     ", #" + std::to_string(operand2) + " -> " + hex32(result));
+            break;
+            
+        case INST_T32_SUBW:
+            result = operand1 - operand2;
+            // SUBW doesn't set flags, so no carry/overflow calculation needed
+            LOG_DEBUG("SUBW r" + std::to_string(fields.rd) + ", " + 
+                     (fields.rn == 15 ? "pc" : "r" + std::to_string(fields.rn)) + 
+                     ", #" + std::to_string(operand2) + " -> " + hex32(result));
+            break;
+
+        case INST_T32_MOVW:
+            result = fields.imm; // MOVW just moves the 16-bit immediate to the register
+            // MOVW doesn't set flags
+            LOG_DEBUG("MOVW r" + std::to_string(fields.rd) + ", #" + std::to_string(fields.imm) + 
+                     " -> " + hex32(result));
+            break;
+            
+        case INST_T32_MOVT:
+            // MOVT moves the 16-bit immediate to upper 16 bits, preserving lower 16 bits
+            result = (operand1 & 0xFFFF) | (fields.imm << 16);
+            // MOVT doesn't set flags
+            LOG_DEBUG("MOVT r" + std::to_string(fields.rd) + ", #" + std::to_string(fields.imm) + 
+                     " -> " + hex32(result));
             break;
 
         case INST_T32_ADC_IMM: {
@@ -2452,7 +2634,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
         // T32 Data Processing Instructions (Register operands)
         case INST_T32_AND_REG:
         case INST_T32_ANDS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 & operand2_shifted;
             bool set_flags = (fields.type == INST_T32_ANDS_REG);
@@ -2467,7 +2649,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             
         case INST_T32_ORR_REG:
         case INST_T32_ORRS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 | operand2_shifted;
             bool set_flags = (fields.type == INST_T32_ORRS_REG);
@@ -2482,7 +2664,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             
         case INST_T32_EOR_REG:
         case INST_T32_EORS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 ^ operand2_shifted;
             bool set_flags = (fields.type == INST_T32_EORS_REG);
@@ -2497,7 +2679,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             
         case INST_T32_BIC_REG:
         case INST_T32_BICS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 & (~operand2_shifted);
             bool set_flags = (fields.type == INST_T32_BICS_REG);
@@ -2512,7 +2694,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             
         case INST_T32_ADD_REG:
         case INST_T32_ADDS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 + operand2_shifted;
             carry = result < operand1;
@@ -2529,7 +2711,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             
         case INST_T32_SUB_REG:
         case INST_T32_SUBS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 - operand2_shifted;
             carry = operand1 >= operand2_shifted;
@@ -2547,7 +2729,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
         // MOV instructions (single operand)
         case INST_T32_MOV_REG:
         case INST_T32_MOVS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand2_shifted;
             bool set_flags = (fields.type == INST_T32_MOVS_REG);
@@ -2562,7 +2744,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             
         case INST_T32_MVN_REG:
         case INST_T32_MVNS_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = ~operand2_shifted;
             bool set_flags = (fields.type == INST_T32_MVNS_REG);
@@ -2577,7 +2759,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             
         // Compare instructions (no result register)
         case INST_T32_TST_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 & operand2_shifted;
             LOG_DEBUG("TST.W r" + std::to_string(fields.rn) + ", r" + std::to_string(fields.rm));
@@ -2586,7 +2768,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
         }
             
         case INST_T32_CMP_REG: {
-            uint32_t operand2_shifted = apply_shift(m_registers->read_register(fields.rm), 
+            uint32_t operand2_shifted = apply_shift(read_register_with_pc_adjust(m_registers, fields.rm), 
                                                    fields.shift_type, fields.shift_amount);
             result = operand1 - operand2_shifted;
             carry = operand1 >= operand2_shifted;
@@ -2751,10 +2933,12 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
     
     // Calculate address
     if (fields.type == INST_T32_LDR_PC) {
-        // PC-relative addressing
+        // PC-relative addressing for T32 instructions
+        // ARM specification: use (current instruction address + 4) as base
         uint32_t pc = m_registers->get_pc();
-        // PC is already advanced by 4, align to word boundary for PC-relative loads
-        address = (pc & 0xFFFFFFFC) + fields.imm;
+        uint32_t base_pc = pc + 4; // PC+4 for T32 instruction
+        // Align to word boundary for PC-relative loads
+        address = (base_pc & 0xFFFFFFFC) + fields.imm;
     } else if (is_pre_post_indexed) {
         // Pre/post indexed addressing
         uint32_t base_addr = m_registers->read_register(fields.rn);
@@ -3060,6 +3244,26 @@ bool Execute::execute_divide(const InstructionFields& fields)
     return false;
 }
 
+bool Execute::execute_mul(const InstructionFields& fields)
+{
+    // MUL - Multiply: Rd = Rn * Rm
+    
+    uint32_t multiplicand = m_registers->read_register(fields.rn);
+    uint32_t multiplier = m_registers->read_register(fields.rm);
+    
+    // Perform multiply
+    uint32_t result = multiplicand * multiplier;
+    
+    m_registers->write_register(fields.rd, result);
+    
+    LOG_DEBUG("MUL r" + std::to_string(fields.rd) + ", r" + std::to_string(fields.rn) + 
+             ", r" + std::to_string(fields.rm) + 
+             " -> " + std::to_string(multiplicand) + 
+             " * " + std::to_string(multiplier) + " = " + std::to_string(result));
+    
+    return false;
+}
+
 bool Execute::execute_mla(const InstructionFields& fields)
 {
     // MLA - Multiply and Accumulate: Rd = Ra + (Rn * Rm)
@@ -3169,9 +3373,18 @@ bool Execute::execute_bitfield(const InstructionFields& fields)
 {
     // Bitfield operations: BFI, BFC, UBFX, SBFX
     
-    uint32_t lsb = fields.imm & 0x1F;        // bits [4:0]
-    uint32_t msb = (fields.imm >> 8) & 0x1F; // bits [12:8]
-    uint32_t width = msb - lsb + 1;
+    uint32_t lsb, width;
+    
+    if (fields.type == INST_T32_UBFX || fields.type == INST_T32_SBFX) {
+        // For UBFX/SBFX: width is stored in upper bits, lsb in lower bits
+        lsb = fields.imm & 0x1F;        // bits [4:0]
+        width = (fields.imm >> 8) & 0x1F; // bits [12:8]
+    } else {
+        // For BFI/BFC: calculate width from msb and lsb
+        lsb = fields.imm & 0x1F;        // bits [4:0]
+        uint32_t msb = (fields.imm >> 8) & 0x1F; // bits [12:8]
+        width = msb - lsb + 1;
+    }
     
     switch (fields.type) {
         case INST_T32_BFI: {

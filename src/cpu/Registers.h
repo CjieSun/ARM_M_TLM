@@ -143,6 +143,8 @@ public:
     uint8_t get_it_mask() const { return m_it_mask; }
     uint8_t get_it_index() const { return m_it_index; }
     uint8_t get_it_len() const { return m_it_len; }
+    bool get_it_condition_result() const { return m_it_cond_result; }
+    void set_it_condition_result(bool result) { m_it_cond_result = result; }
     void advance_it_state() {
         if (m_it_len == 0) return;
         ++m_it_index;
@@ -218,6 +220,7 @@ private:
     uint8_t m_it_mask;     // IT mask
     uint8_t m_it_len;     // Number of instructions in IT block (1..4)
     uint8_t m_it_index;   // Current instruction index within IT block
+    bool m_it_cond_result; // Condition result evaluated when IT block started
 };
 
 #endif // REGISTERS_H
