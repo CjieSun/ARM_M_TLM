@@ -2201,7 +2201,7 @@ bool Execute::execute_extend(const InstructionFields& fields)
                 // Sign extend halfword (16-bit) to word (32-bit)
                 uint16_t halfword = static_cast<uint16_t>(source_value & 0xFFFF);
                 result = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(halfword)));
-                LOG_DEBUG("SXTH.W: sign extended 0x" + std::to_string(halfword) + " to 0x" + std::to_string(result));
+                LOG_DEBUG("SXTH.W: sign extended " + hex32(halfword) + " to " + hex32(result));
                 break;
             }
             
@@ -2209,21 +2209,21 @@ bool Execute::execute_extend(const InstructionFields& fields)
                 // Sign extend byte (8-bit) to word (32-bit)
                 uint8_t byte = static_cast<uint8_t>(source_value & 0xFF);
                 result = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int8_t>(byte)));
-                LOG_DEBUG("SXTB.W: sign extended 0x" + std::to_string(byte) + " to 0x" + std::to_string(result));
+                LOG_DEBUG("SXTB.W: sign extended " + hex32(byte) + " to " + hex32(result));
                 break;
             }
             
             case INST_T32_UXTH: {
                 // Zero extend halfword (16-bit) to word (32-bit)
                 result = source_value & 0xFFFF;
-                LOG_DEBUG("UXTH.W: zero extended to 0x" + std::to_string(result));
+                LOG_DEBUG("UXTH.W: zero extended to " + hex32(result));
                 break;
             }
             
             case INST_T32_UXTB: {
                 // Zero extend byte (8-bit) to word (32-bit)
                 result = source_value & 0xFF;
-                LOG_DEBUG("UXTB.W: zero extended to 0x" + std::to_string(result));
+                LOG_DEBUG("UXTB.W: zero extended to " + hex32(result));
                 break;
             }
         }
@@ -2570,14 +2570,14 @@ bool Execute::execute_table_branch(const InstructionFields& fields, void* data_b
         uint32_t table_addr = base_addr + index;
         uint8_t branch_offset = (uint8_t)read_memory(table_addr, 1, data_bus);
         offset = branch_offset * 2; // Thumb instructions are 2-byte aligned
-        LOG_DEBUG("TBB: base=0x" + hex32(base_addr) + ", index=" + std::to_string(index) + 
+        LOG_DEBUG("TBB: base=" + hex32(base_addr) + ", index=" + std::to_string(index) + 
                  ", offset=" + std::to_string(branch_offset));
     } else {
         // TBH - Table Branch Halfword  
         uint32_t table_addr = base_addr + (index * 2);
         uint16_t branch_offset = (uint16_t)read_memory(table_addr, 2, data_bus);
         offset = branch_offset * 2; // Thumb instructions are 2-byte aligned
-        LOG_DEBUG("TBH: base=0x" + hex32(base_addr) + ", index=" + std::to_string(index) + 
+        LOG_DEBUG("TBH: base=" + hex32(base_addr) + ", index=" + std::to_string(index) + 
                  ", offset=" + std::to_string(branch_offset));
     }
     
@@ -2587,7 +2587,7 @@ bool Execute::execute_table_branch(const InstructionFields& fields, void* data_b
     // Clear IT state on control-flow change
     m_registers->clear_it_state();
     
-    LOG_DEBUG("Table branch to PC=0x" + hex32(target_pc));
+    LOG_DEBUG("Table branch to PC=" + hex32(target_pc));
     return true; // PC changed
 }
 
@@ -3093,13 +3093,15 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
     }
     
     // Calculate address
-    if (fields.type == INST_T32_LDR_PC || fields.type == INST_T32_LDR_LIT) {
+    if (fields.type == INST_T32_LDR_PC || fields.type == INST_T32_LDR_LIT ||
+        fields.type == INST_T32_LDRB_LIT || fields.type == INST_T32_LDRH_LIT) {
         // PC-relative addressing for T32 instructions
         // ARM specification: use (current instruction address + 4) as base
         uint32_t pc = m_registers->get_pc();
         uint32_t base_pc = pc + 4; // PC+4 for T32 instruction
         // Align to word boundary for PC-relative loads
-        address = (base_pc & 0xFFFFFFFC) + fields.imm;
+        int32_t signed_offset = fields.negative_offset ? -(int32_t)fields.imm : (int32_t)fields.imm;
+        address = (base_pc & 0xFFFFFFFC) + signed_offset;
     } else if (fields.type == INST_T32_LDR_REG || fields.type == INST_T32_STR_REG || 
                fields.type == INST_T32_STRB_REG || fields.type == INST_T32_STRH_REG ||
                fields.type == INST_T32_LDRB_REG || fields.type == INST_T32_LDRH_REG ||
@@ -3182,7 +3184,7 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
     
     // Check alignment for word and halfword accesses; byte (size==1) is always allowed
     if (size > 1 && (address & (size - 1)) != 0) {
-        LOG_WARNING("Unaligned access at address 0x" + hex32(address));
+        LOG_WARNING("Unaligned access at address " + hex32(address));
         // In real ARM, this could generate an alignment fault
     }
     
@@ -3204,7 +3206,7 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
                 uint32_t raw_value = value;
                 value &= 0xFF; // Zero extend byte
                 if (fields.type == INST_T32_LDRB_IMM || fields.type == INST_T32_LDRB_PRE_POST) {
-                    LOG_DEBUG("LDRB: raw_value=0x" + hex32(raw_value) + ", final_value=0x" + hex32(value) + ", size=" + std::to_string(size));
+                    LOG_DEBUG("LDRB: raw_value=" + hex32(raw_value) + ", final_value=" + hex32(value) + ", size=" + std::to_string(size));
                 }
             } else if (size == 2) {
                 value &= 0xFFFF; // Zero extend halfword
@@ -3237,18 +3239,18 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
         
         if (fields.type == INST_T32_LDR_PC || fields.type == INST_T32_LDR_LIT) {
             LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [PC, #" + 
-                     std::to_string((int32_t)fields.imm) + "] -> loaded 0x" + hex32(value) + 
-                     " from 0x" + hex32(address));
+                     std::to_string((int32_t)fields.imm) + "] -> loaded " + hex32(value) + 
+                     " from " + hex32(address));
         } else if (fields.type == INST_T32_LDR_REG || fields.type == INST_T32_LDRB_REG || 
                    fields.type == INST_T32_LDRH_REG || fields.type == INST_T32_LDRSB_REG || 
                    fields.type == INST_T32_LDRSH_REG) {
             LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [" + reg_name(fields.rn) + 
-                     ", " + reg_name(fields.rm) + "] -> loaded 0x" + hex32(value) + 
-                     " from 0x" + hex32(address));
+                     ", " + reg_name(fields.rm) + "] -> loaded " + hex32(value) + 
+                     " from " + hex32(address));
         } else {
             LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [" + reg_name(fields.rn) + 
-                     ", #" + std::to_string((int32_t)fields.imm) + "] -> loaded 0x" + hex32(value) + 
-                     " from 0x" + hex32(address));
+                     ", #" + std::to_string((int32_t)fields.imm) + "] -> loaded " + hex32(value) + 
+                     " from " + hex32(address));
         }
         
     } else {
@@ -3280,12 +3282,12 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
         
         if (fields.type == INST_T32_STR_REG || fields.type == INST_T32_STRB_REG || fields.type == INST_T32_STRH_REG) {
             LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [" + reg_name(fields.rn) + 
-                     ", " + reg_name(fields.rm) + "] -> stored 0x" + hex32(value) + 
-                     " to 0x" + hex32(address));
+                     ", " + reg_name(fields.rm) + "] -> stored " + hex32(value) + 
+                     " to " + hex32(address));
         } else {
             LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [" + reg_name(fields.rn) + 
-                     ", #" + std::to_string((int32_t)fields.imm) + "] -> stored 0x" + hex32(value) + 
-                     " to 0x" + hex32(address));
+                     ", #" + std::to_string((int32_t)fields.imm) + "] -> stored " + hex32(value) + 
+                     " to " + hex32(address));
         }
     }
     
@@ -3303,7 +3305,7 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
             new_base = base_addr + signed_offset;
         }
         m_registers->write_register(fields.rn, new_base);
-        LOG_TRACE("[REG] WRITE " + reg_name(fields.rn) + " = 0x" + hex32(new_base) + " (writeback)");
+        LOG_TRACE("[REG] WRITE " + reg_name(fields.rn) + " = " + hex32(new_base) + " (writeback)");
     }
     
     return false; // PC not changed for normal load/store
@@ -3336,7 +3338,7 @@ bool Execute::execute_exclusive_load(const InstructionFields& fields, void* data
     
     // Check alignment
     if ((address & (size - 1)) != 0) {
-        LOG_WARNING("Unaligned exclusive access at address 0x" + hex32(address));
+        LOG_WARNING("Unaligned exclusive access at address " + hex32(address));
         // In real ARM, this would generate an alignment fault
     }
     
@@ -3351,7 +3353,7 @@ bool Execute::execute_exclusive_load(const InstructionFields& fields, void* data
     // Write result to register
     m_registers->write_register(fields.rd, value);
     
-    LOG_DEBUG("LDREX: loaded 0x" + hex32(value) + " from address 0x" + hex32(address) + 
+    LOG_DEBUG("LDREX: loaded " + hex32(value) + " from address " + hex32(address) + 
              ", exclusive monitor set");
     
     return false;
@@ -3384,7 +3386,7 @@ bool Execute::execute_exclusive_store(const InstructionFields& fields, void* dat
     
     // Check alignment
     if ((address & (size - 1)) != 0) {
-        LOG_WARNING("Unaligned exclusive access at address 0x" + hex32(address));
+        LOG_WARNING("Unaligned exclusive access at address " + hex32(address));
     }
     
     uint32_t status = 0;  // Success by default
@@ -3395,13 +3397,12 @@ bool Execute::execute_exclusive_store(const InstructionFields& fields, void* dat
         m_exclusive_size != size) {
         // Exclusive monitor mismatch - store fails
         status = 1;
-        LOG_DEBUG("STREX: failed (monitor mismatch), address=0x" + hex32(address));
+        LOG_DEBUG("STREX: failed (monitor mismatch), address=" + hex32(address));
     } else {
         // Exclusive monitor matches - perform store
         write_memory(address, value, size, data_bus);
         status = 0;
-        LOG_DEBUG("STREX: stored 0x" + hex32(value) + " to address 0x" + hex32(address) + 
-                 ", success");
+        LOG_DEBUG("STREX: stored " + hex32(value) + " to address " + hex32(address) + ", success");
     }
     
     // Clear exclusive monitor after any STREX attempt
@@ -3434,16 +3435,14 @@ bool Execute::execute_divide(const InstructionFields& fields)
         if (fields.type == INST_T32_UDIV) {
             // Unsigned divide
             result = dividend / divisor;
-            LOG_DEBUG("UDIV: " + std::to_string(dividend) + " / " + std::to_string(divisor) + 
-                     " = " + std::to_string(result));
+            LOG_DEBUG("UDIV: " + std::to_string(dividend) + " / " + std::to_string(divisor) + " = " + std::to_string(result));
         } else {
             // Signed divide
             int32_t signed_dividend = (int32_t)dividend;
             int32_t signed_divisor = (int32_t)divisor;
             int32_t signed_result = signed_dividend / signed_divisor;
             result = (uint32_t)signed_result;
-            LOG_DEBUG("SDIV: " + std::to_string(signed_dividend) + " / " + std::to_string(signed_divisor) + 
-                     " = " + std::to_string(signed_result));
+            LOG_DEBUG("SDIV: " + std::to_string(signed_dividend) + " / " + std::to_string(signed_divisor) + " = " + std::to_string(signed_result));
         }
     }
     

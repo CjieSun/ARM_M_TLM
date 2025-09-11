@@ -1721,7 +1721,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             fields.rd = (instruction >> 12) & 0xF;
             fields.load_store_bit = 0;
             fields.pre_indexed = (instruction & 0x400) != 0;
-            fields.negative_offset = (instruction & 0x200) != 0;
+            fields.negative_offset = (instruction & 0x200) == 0;
             fields.writeback = (instruction & 0x100) != 0;
 
             // 按照A5-21表格的op1和op2字段分类
@@ -1729,8 +1729,8 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                 case 0x0: // 000 xxxxxx: Store Register Byte
                     if ((op2_field & 0x20) == 0x20) {
                         // 000 1xxxxx: STRB (immediate)
-                        fields.type = INST_T32_STRB_IMM;
-                        fields.imm = instruction & 0xFFF;
+                        fields.type = INST_T32_STRB_PRE_POST;
+                        fields.imm = instruction & 0xFF;
                         return fields;
                     } else {
                         // 000 0xxxxx: STRB (register)
@@ -1743,8 +1743,8 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                 case 0x1: // 001 xxxxxx: Store Register Halfword
                     if ((op2_field & 0x20) == 0x20) {
                         // 001 1xxxxx: STRH (immediate)
-                        fields.type = INST_T32_STRH_IMM;
-                        fields.imm = instruction & 0xFFF;
+                        fields.type = INST_T32_STRH_PRE_POST;
+                        fields.imm = instruction & 0xFF;
                         return fields;
                     } else {
                         // 001 0xxxxx: STRH (register)
@@ -1757,8 +1757,8 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                 case 0x2: // 010 xxxxxx: Store Register
                     if ((op2_field & 0x20) == 0x20) {
                         // 010 1xxxxx: STR (immediate)
-                        fields.type = INST_T32_STR_IMM;
-                        fields.imm = instruction & 0xFFF;
+                        fields.type = INST_T32_STR_PRE_POST;
+                        fields.imm = instruction & 0xFF;
                         return fields;
                     } else {
                         // 010 0xxxxx: STR (register)
@@ -1770,18 +1770,18 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                     break;
                 case 0x4: // 100 xxxxxx: Store Register Byte
                     // 100 xxxxxx: STRB (immediate)
-                    fields.type = INST_T32_STRB_PRE_POST;
-                    fields.imm = instruction & 0xFF;
+                    fields.type = INST_T32_STRB_IMM;
+                    fields.imm = instruction & 0xFFF;
                     return fields;
                 case 0x5: // 101 xxxxxx: Store Register Halfword
                     // 101 xxxxxx: STRH (immediate)
-                    fields.type = INST_T32_STRH_PRE_POST;
-                    fields.imm = instruction & 0xFF;
+                    fields.type = INST_T32_STRH_IMM;
+                    fields.imm = instruction & 0xFFF;
                     return fields;
                 case 0x6: // 110 xxxxxx: Store Register
                     // 110 xxxxxx: STR (immediate)
-                    fields.type = INST_T32_STR_PRE_POST;
-                    fields.imm = instruction & 0xFF;
+                    fields.type = INST_T32_STR_IMM;
+                    fields.imm = instruction & 0xFFF;
                     return fields;
                 default:
                     // Other op1 values are UNDEFINED or reserved
@@ -1793,28 +1793,31 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
         // 11 00xx001 x: Load byte, memory hints
         else if (((op2 & 0x67) == 0x01)) {
             // 按照ARM手册A5-20表格实现加载字节和内存提示指令
-            uint32_t op1_field = (instruction >> 23) & 0x1;   // bit 23 (op1)
+            uint32_t op1_field = (instruction >> 23) & 0x3;   // bits 24:23(op1)
             uint32_t op2_field = (instruction >> 6) & 0x3F;   // bits 11:6 (op2)
-            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
-            uint32_t rt = (instruction >> 12) & 0xF;          // bits 15:12 (Rt)
+            fields.rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            fields.rd = (instruction >> 12) & 0xF;          // bits 15:12 (Rt)
             
             // 按照A5-20表格的op1、op2、Rn、Rt字段分类
             if (op1_field == 0x0) {
-                // 0x xxxxxx not 1111 not 1111: Load Register Byte
-                if (rn != 0xF && rt != 0xF) {
-                    if ((op2_field & 0x20) == 0x00) {
-                        // 0x 0xxxxx not 1111 not 1111: LDRB (immediate)
-                        fields.type = INST_T32_LDRB_IMM;
-                        fields.rn = rn;
-                        fields.rd = rt;
-                        fields.imm = instruction & 0xFFF;
+                // 00 xxxxxx not 1111 not 1111:
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    if (((op2_field & 0x24) == 0x24) 
+                        // 0x 1xx1xx not 1111 not 1111: LDRB (immediate)
+                        || ((op2_field & 0x3C) == 0x30)
+                        // 0x 1100xx not 1111 not 1111: LDRB (immediate)
+                        || ((op2_field & 0x3C) == 0x38)) {
+                        // 0x 1110xx not 1111 not 1111: Load Register Byte Unprivileged LDRBT
+                        fields.type = INST_T32_LDRB_PRE_POST;
+                        fields.imm = instruction & 0xFF; //8 bit
+                        fields.pre_indexed = (instruction & 0x400) != 0;
+                        fields.negative_offset = (instruction & 0x200) == 0;
+                        fields.writeback = (instruction & 0x100) != 0;
                         fields.load_store_bit = 1;
                         return fields;
-                    } else {
-                        // 0x 1xxxxx not 1111 not 1111: LDRB (register)
+                    } else if (op2_field == 0x00) {
+                        // 0x 000000 not 1111 not 1111: LDRB (register)
                         fields.type = INST_T32_LDRB_REG;
-                        fields.rn = rn;
-                        fields.rd = rt;
                         fields.rm = instruction & 0xF;
                         fields.shift_amount = (instruction >> 4) & 0x3;
                         fields.load_store_bit = 1;
@@ -1822,97 +1825,150 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                     }
                 }
                 // 0x xxxxxx 1111 not 1111: Load Register Byte
-                else if (rn == 0xF && rt != 0xF) {
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
                     fields.type = INST_T32_LDRB_LIT;  // LDRB (literal)
-                    fields.rd = rt;
-                    fields.imm = instruction & 0xFFF;
-                    bool u_bit = (instruction & 0x00800000) != 0;
-                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.imm = instruction & 0xFFF; //12bit
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
                     fields.load_store_bit = 1;
                     return fields;
                 }
                 // Memory hints when Rt = 1111
-                else if (rt == 0xF) {
-                    if ((op2_field & 0x24) == 0x00) {
-                        // 00 000000 not 1111 1111: Preload Data
-                        if (rn != 0xF) {
-                            fields.type = INST_T32_PLD_IMM;  // PLD (immediate)
-                            fields.rn = rn;
-                            fields.imm = instruction & 0xFFF;
-                            return fields;
-                        } else {
-                            fields.type = INST_T32_PLD_LIT;  // PLD (literal)
-                            fields.imm = instruction & 0xFFF;
-                            bool u_bit = (instruction & 0x00800000) != 0;
-                            if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
-                            return fields;
-                        }
-                    } else if ((op2_field & 0x20) == 0x20) {
-                        // 00 1xxxxx not 1111 1111: Preload Data
-                        fields.type = INST_T32_PLD_REG;  // PLD (register)
-                        fields.rn = rn;
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    if ((op2_field & 0x3C) == 0x30) {
+                        // 00 1100xx not 1111 1111: PLD (immediate)
+                        fields.type = INST_T32_PLD_IMM;
+                        fields.imm = instruction & 0xFF; // 8-bit
+                        return fields;
+                    } else if (op2_field == 0) {
+                        // 00 000000 not 1111 1111: PLD (register)
+                        fields.type = INST_T32_PLD_REG;
                         fields.rm = instruction & 0xF;
                         fields.shift_amount = (instruction >> 4) & 0x3;
                         return fields;
                     }
+                }
+                else if (fields.rn == 0xF && fields.rd == 0xF) {
+                    //0x xxxxxx 1111 1111: PLD (literal)
+                    fields.type = INST_T32_PLD_LIT;
+                    fields.imm = instruction & 0xFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    return fields;
                 }
             }
             else if (op1_field == 0x1) {
-                // 1x xxxxxx not 1111 not 1111: Load Register Signed Byte
-                if (rn != 0xF && rt != 0xF) {
-                    if ((op2_field & 0x20) == 0x00) {
-                        // 1x 0xxxxx not 1111 not 1111: LDRSB (immediate)
-                        fields.type = INST_T32_LDRSB_IMM;
-                        fields.rn = rn;
-                        fields.rd = rt;
-                        fields.imm = instruction & 0xFFF;
+                // 01 xxxxxx not 1111 not 1111: Load Register Byte
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    // 1x 0xxxxx not 1111 not 1111: LDRB (immediate)
+                    fields.type = INST_T32_LDRB_IMM;
+                    fields.imm = instruction & 0xFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // 0x xxxxxx 1111 not 1111: Load Register Byte
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
+                    fields.type = INST_T32_LDRSB_LIT;  // LDRB (literal)
+                    fields.imm = instruction & 0xFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // 01 xxxxxx not 1111 1111: PLD (immediate)
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    fields.type = INST_T32_PLD_IMM;
+                    fields.imm = instruction & 0xFFF;
+                    return fields;
+                }
+                // 01 xxxxxx 1111 1111: PLD (literal)
+                else if (fields.rn == 0xF && fields.rd == 0xF) {
+                    fields.type = INST_T32_PLD_LIT;
+                    fields.imm = instruction & 0xFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    return fields;
+                }
+            }
+            else if (op1_field == 0x2) {
+                // 10 xxxxxx not 1111 not 1111:
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    if (((op2_field & 0x24) == 0x24) 
+                        // 0x 1xx1xx not 1111 not 1111: LDRSB (immediate)
+                        || ((op2_field & 0x3C) == 0x30)
+                        // 0x 1100xx not 1111 not 1111: LDRSB (immediate)
+                        || ((op2_field & 0x3C) == 0x38)) {
+                        // 0x 1110xx not 1111 not 1111: Load Register Byte Unprivileged LDRSBT
+                        fields.type = INST_T32_LDRSB_PRE_POST;
+                        fields.imm = instruction & 0xFF; //8 bit
+                        fields.pre_indexed = (instruction & 0x400) != 0;
+                        fields.negative_offset = (instruction & 0x200) == 0;
+                        fields.writeback = (instruction & 0x100) != 0;
                         fields.load_store_bit = 1;
                         return fields;
-                    } else {
-                        // 1x 1xxxxx not 1111 not 1111: LDRSB (register)
+                    } else if (op2_field == 0x00) {
+                        // 0x 000000 not 1111 not 1111: LDRSB (register)
                         fields.type = INST_T32_LDRSB_REG;
-                        fields.rn = rn;
-                        fields.rd = rt;
                         fields.rm = instruction & 0xF;
                         fields.shift_amount = (instruction >> 4) & 0x3;
                         fields.load_store_bit = 1;
                         return fields;
                     }
                 }
-                // 1x xxxxxx 1111 not 1111: Load Register Signed Byte
-                else if (rn == 0xF && rt != 0xF) {
+                // 1x xxxxxx 1111 not 1111: Load Register Byte
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
                     fields.type = INST_T32_LDRSB_LIT;  // LDRSB (literal)
-                    fields.rd = rt;
-                    fields.imm = instruction & 0xFFF;
-                    bool u_bit = (instruction & 0x00800000) != 0;
-                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.imm = instruction & 0xFFF; //12bit
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
                     fields.load_store_bit = 1;
                     return fields;
                 }
                 // Memory hints when Rt = 1111
-                else if (rt == 0xF) {
-                    if ((op2_field & 0x24) == 0x00) {
-                        // 1x 000000 not 1111 1111: Preload Instruction
-                        if (rn != 0xF) {
-                            fields.type = INST_T32_PLI_IMM;  // PLI (immediate)
-                            fields.rn = rn;
-                            fields.imm = instruction & 0xFFF;
-                            return fields;
-                        } else {
-                            fields.type = INST_T32_PLI_LIT;  // PLI (literal)
-                            fields.imm = instruction & 0xFFF;
-                            bool u_bit = (instruction & 0x00800000) != 0;
-                            if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
-                            return fields;
-                        }
-                    } else if ((op2_field & 0x20) == 0x20) {
-                        // 1x 1xxxxx not 1111 1111: Preload Instruction
-                        fields.type = INST_T32_PLI_REG;  // PLI (register)
-                        fields.rn = rn;
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    if ((op2_field & 0x3C) == 0x30) {
+                        // 00 1100xx not 1111 1111: PLI (immediate)
+                        fields.type = INST_T32_PLI_IMM;
+                        fields.imm = instruction & 0xFF; // 8-bit
+                        return fields;
+                    } else if (op2_field == 0) {
+                        // 00 000000 not 1111 1111: PLI (register)
+                        fields.type = INST_T32_PLI_REG;
                         fields.rm = instruction & 0xF;
                         fields.shift_amount = (instruction >> 4) & 0x3;
                         return fields;
                     }
+                }
+                else if (fields.rn == 0xF && fields.rd == 0xF) {
+                    //0x xxxxxx 1111 1111: PLD (literal)
+                    fields.type = INST_T32_PLI_LIT;
+                    fields.imm = instruction & 0xFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    return fields;
+                }
+            }
+            else { //op1_field == 0x3
+                // Load Register Signed Byte Unprivileged when specific conditions
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    // 11 xxxxxx not 1111 not 1111: LDRSB (immediate) 
+                    fields.type = INST_T32_LDRSB_IMM;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
+                    // 11 xxxxxx 1111 not 1111: ULDRSB (literal) 
+                    fields.type = INST_T32_LDRSB_LIT;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
+                    return fields;
+                } 
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    // 11 xxxxxx not 1111 1111: PLI (immediate)
+                    fields.type = INST_T32_PLI_IMM;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
+                    return fields;
+                }
+                else if (fields.rn == 0xF && fields.rd == 0xF)
+                {
+                    // 11 xxxxxx 1111 1111: PLI (literal)
+                    fields.type = INST_T32_PLI_LIT;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
+                    return fields;
                 }
             }
         }
@@ -1920,102 +1976,182 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
         // 11 00xx011 x: Load halfword, unallocated memory hints
         else if (((op2 & 0x67) == 0x03)) {
             // 按照ARM手册A5-19表格实现加载半字和内存提示指令
-            uint32_t op1_field = (instruction >> 23) & 0x1;   // bit 23 (op1)
+            // 按照ARM手册A5-20表格实现加载字节和内存提示指令
+            uint32_t op1_field = (instruction >> 23) & 0x3;   // bits 24:23(op1)
             uint32_t op2_field = (instruction >> 6) & 0x3F;   // bits 11:6 (op2)
-            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
-            uint32_t rt = (instruction >> 12) & 0xF;          // bits 15:12 (Rt)
+            fields.rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            fields.rd = (instruction >> 12) & 0xF;          // bits 15:12 (Rt)
             
-            // 按照A5-19表格的op1、op2、Rn、Rt字段分类
+            // 按照A5-20表格的op1、op2、Rn、Rt字段分类
             if (op1_field == 0x0) {
-                // 0x xxxxxx not 1111 not 1111: Load Register Halfword
-                if (rn != 0xF && rt != 0xF) {
-                    if ((op2_field & 0x20) == 0x00) {
-                        // 0x 0xxxxx not 1111 not 1111: LDRH (immediate)
-                        fields.type = INST_T32_LDRH_IMM;
-                        fields.rn = rn;
-                        fields.rd = rt;
-                        fields.imm = instruction & 0xFFF;
+                // 00 xxxxxx not 1111 not 1111:
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    if (((op2_field & 0x24) == 0x24) 
+                        // 0x 1xx1xx not 1111 not 1111: LDRH (immediate)
+                        || ((op2_field & 0x3C) == 0x30)
+                        // 0x 1100xx not 1111 not 1111: LDRH (immediate)
+                        || ((op2_field & 0x3C) == 0x38)) {
+                        // 0x 1110xx not 1111 not 1111: Unprivileged LDRHT
+                        fields.type = INST_T32_LDRH_PRE_POST;
+                        fields.imm = instruction & 0xFF; //8 bit
+                        fields.pre_indexed = (instruction & 0x400) != 0;
+                        fields.negative_offset = (instruction & 0x200) == 0;
+                        fields.writeback = (instruction & 0x100) != 0;
                         fields.load_store_bit = 1;
                         return fields;
-                    } else {
-                        // 0x 1xxxxx not 1111 not 1111: LDRH (register)
+                    } else if (op2_field == 0x00) {
+                        // 0x 000000 not 1111 not 1111: LDRH (register)
                         fields.type = INST_T32_LDRH_REG;
-                        fields.rn = rn;
-                        fields.rd = rt;
                         fields.rm = instruction & 0xF;
                         fields.shift_amount = (instruction >> 4) & 0x3;
                         fields.load_store_bit = 1;
                         return fields;
                     }
                 }
-                // 0x xxxxxx 1111 not 1111: Load Register Halfword
-                else if (rn == 0xF && rt != 0xF) {
+                // 0x xxxxxx 1111 not 1111: Load Register Byte
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
                     fields.type = INST_T32_LDRH_LIT;  // LDRH (literal)
-                    fields.rd = rt;
-                    fields.imm = instruction & 0xFFF;
-                    bool u_bit = (instruction & 0x00800000) != 0;
-                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.imm = instruction & 0xFFF; //12bit
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
                     fields.load_store_bit = 1;
                     return fields;
                 }
-                // Unallocated memory hints when Rt = 1111
-                else if (rt == 0xF) {
-                    // 00 xxxxxx not 1111 1111: Unallocated memory hint, treat as NOP
-                    fields.type = INST_T32_NOP;  // Unallocated memory hint
+                // Memory hints when Rt = 1111
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    if ((op2_field & 0x3C) == 0x30) {
+                        // 00 1100xx not 1111 1111: NOP (immediate)
+                        fields.type = INST_T32_NOP;
+                        fields.imm = instruction & 0xFF; // 8-bit
+                        return fields;
+                    } else if (op2_field == 0) {
+                        // 00 000000 not 1111 1111: NOP (register)
+                        fields.type = INST_T32_NOP;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        return fields;
+                    }
+                }
+                else if (fields.rn == 0xF && fields.rd == 0xF) {
+                    //0x xxxxxx 1111 1111: NOP (literal)
+                    fields.type = INST_T32_NOP;
+                    fields.imm = instruction & 0xFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
                     return fields;
                 }
             }
             else if (op1_field == 0x1) {
-                // 1x xxxxxx not 1111 not 1111: Load Register Signed Halfword
-                if (rn != 0xF && rt != 0xF) {
-                    if ((op2_field & 0x20) == 0x00) {
-                        // 1x 0xxxxx not 1111 not 1111: LDRSH (immediate)
-                        fields.type = INST_T32_LDRSH_IMM;
-                        fields.rn = rn;
-                        fields.rd = rt;
-                        fields.imm = instruction & 0xFFF;
+                // 01 xxxxxx not 1111 not 1111: Load Register Byte
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    // 1x 0xxxxx not 1111 not 1111: LDRH (immediate)
+                    fields.type = INST_T32_LDRH_IMM;
+                    fields.imm = instruction & 0xFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // 0x xxxxxx 1111 not 1111: Load Register Byte
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
+                    fields.type = INST_T32_LDRSH_LIT;  // LDRH (literal)
+                    fields.imm = instruction & 0xFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // 01 xxxxxx not 1111 1111: NOP (immediate)
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    fields.type = INST_T32_NOP;
+                    fields.imm = instruction & 0xFFF;
+                    return fields;
+                }
+                // 01 xxxxxx 1111 1111: NOP (literal)
+                else if (fields.rn == 0xF && fields.rd == 0xF) {
+                    fields.type = INST_T32_NOP;
+                    fields.imm = instruction & 0xFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    return fields;
+                }
+            }
+            else if (op1_field == 0x2) {
+                // 10 xxxxxx not 1111 not 1111:
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    if (((op2_field & 0x24) == 0x24) 
+                        // 0x 1xx1xx not 1111 not 1111: LDRSH (immediate)
+                        || ((op2_field & 0x3C) == 0x30)
+                        // 0x 1100xx not 1111 not 1111: LDRSH (immediate)
+                        || ((op2_field & 0x3C) == 0x38)) {
+                        // 0x 1110xx not 1111 not 1111: Unprivileged LDRSHT
+                        fields.type = INST_T32_LDRSH_PRE_POST;
+                        fields.imm = instruction & 0xFF; //8 bit
+                        fields.pre_indexed = (instruction & 0x400) != 0;
+                        fields.negative_offset = (instruction & 0x200) == 0;
+                        fields.writeback = (instruction & 0x100) != 0;
                         fields.load_store_bit = 1;
                         return fields;
-                    } else {
-                        // 1x 1xxxxx not 1111 not 1111: LDRSH (register)
+                    } else if (op2_field == 0x00) {
+                        // 0x 000000 not 1111 not 1111: LDRSH (register)
                         fields.type = INST_T32_LDRSH_REG;
-                        fields.rn = rn;
-                        fields.rd = rt;
                         fields.rm = instruction & 0xF;
                         fields.shift_amount = (instruction >> 4) & 0x3;
                         fields.load_store_bit = 1;
                         return fields;
                     }
                 }
-                // 1x xxxxxx 1111 not 1111: Load Register Signed Halfword
-                else if (rn == 0xF && rt != 0xF) {
+                // 1x xxxxxx 1111 not 1111: Load Register Byte
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
                     fields.type = INST_T32_LDRSH_LIT;  // LDRSH (literal)
-                    fields.rd = rt;
+                    fields.imm = instruction & 0xFFF; //12bit
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                // Memory hints when Rt = 1111
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    if ((op2_field & 0x3C) == 0x30) {
+                        // 00 1100xx not 1111 1111: NOP (immediate)
+                        fields.type = INST_T32_NOP;
+                        fields.imm = instruction & 0xFF; // 8-bit
+                        return fields;
+                    } else if (op2_field == 0) {
+                        // 00 000000 not 1111 1111: NOP (register)
+                        fields.type = INST_T32_NOP;
+                        fields.rm = instruction & 0xF;
+                        fields.shift_amount = (instruction >> 4) & 0x3;
+                        return fields;
+                    }
+                }
+                else if (fields.rn == 0xF && fields.rd == 0xF) {
+                    //0x xxxxxx 1111 1111: NOP (literal)
+                    fields.type = INST_T32_NOP;
                     fields.imm = instruction & 0xFFF;
-                    bool u_bit = (instruction & 0x00800000) != 0;
-                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
+                    return fields;
+                }
+            }
+            else { //op1_field == 0x3
+                // Load Register Signed Byte Unprivileged when specific conditions
+                if (fields.rn != 0xF && fields.rd != 0xF) {
+                    // 11 xxxxxx not 1111 not 1111: LDRSH (immediate) 
+                    fields.type = INST_T32_LDRSH_IMM;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
                     fields.load_store_bit = 1;
                     return fields;
                 }
-                // Load Register Signed Halfword Unprivileged when specific conditions
-                else if (rn != 0xF && rt != 0xF && (op2_field & 0x38) == 0x30) {
-                    // 10 110xxx not 1111 not 1111: LDRSHT
-                    fields.type = INST_T32_LDRSHT;
-                    fields.rn = rn;
-                    fields.rd = rt;
-                    fields.imm = instruction & 0xFF;  // 8-bit immediate
-                    fields.load_store_bit = 1;
+                else if (fields.rn == 0xF && fields.rd != 0xF) {
+                    // 11 xxxxxx 1111 not 1111: LDRSH (literal) 
+                    fields.type = INST_T32_LDRSH_LIT;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
+                    return fields;
+                } 
+                else if (fields.rn != 0xF && fields.rd == 0xF) {
+                    // 11 xxxxxx not 1111 1111: NOP
+                    fields.type = INST_T32_NOP;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
                     return fields;
                 }
-                // Unallocated memory hints when Rt = 1111
-                else if (rt == 0xF) {
-                    // 1x xxxxxx not 1111 1111: Unallocated memory hint, treat as NOP
-                    fields.type = INST_T32_NOP;  // Unallocated memory hint
-                    return fields;
-                }
-                // UNPREDICTABLE cases
-                else {
-                    fields.type = INST_UNKNOWN;  // UNPREDICTABLE
+                else if (fields.rn == 0xF && fields.rd == 0xF)
+                {
+                    // 11 xxxxxx 1111 1111: NOP
+                    fields.type = INST_T32_NOP;
+                    fields.imm = instruction & 0xFFF;  // 12-bit immediate
                     return fields;
                 }
             }
@@ -2026,33 +2162,40 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             // 按照ARM手册A5-18表格实现加载字指令
             uint32_t op1_field = (instruction >> 23) & 0x3;   // bits 24:23 (op1)
             uint32_t op2_field = (instruction >> 6) & 0x3F;   // bits 11:6 (op2)
-            uint32_t rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            fields.rn = (instruction >> 16) & 0xF;          // bits 19:16 (Rn)
+            fields.rd = (instruction >> 12) & 0xF;
+            fields.load_store_bit = 1;
 
             // 按照A5-18表格的op1、op2、Rn字段分类
             // 0x xxxxxx 1111: Load Register (literal)
-            if (rn == 0xF) {
+            if (fields.rn == 0xF) {
                 if ((op1_field & 0x2) == 0x0) {
                     fields.type = INST_T32_LDR_LIT;  // LDR (literal)
-                    fields.rd = (instruction >> 12) & 0xF;
+                    fields.negative_offset = (instruction & 0x00800000) == 0;
                     fields.imm = instruction & 0xFFF;
-                    bool u_bit = (instruction & 0x00800000) != 0;
-                    if (!u_bit) fields.imm = (-fields.imm) & 0xFFFFFFFF;
-                    fields.load_store_bit = 1;
                     return fields;
                 }
             }
             else {
                 // 01 xxxxxx not 1111: LDR (immediate)
-                if ((op1_field == 0x1)
-                // 00 1xx1xx not 1111: LDR (immediate)
-                    || ((op1_field == 0x0) && ((op2_field & 0x24) == 0x24))
-                // 00 1100xx not 1111: LDR (immediate)
+                if (op1_field == 0x1)
+                {
+                    fields.type = INST_T32_LDR_IMM;
+                    fields.imm = instruction & 0xFFF;
+                    fields.load_store_bit = 1;
+                    return fields;
+                }
+                else if (
+                // 00 1xx1xx not 1111: LDR (immediate) prepost
+                    ((op1_field == 0x0) && ((op2_field & 0x24) == 0x24))
+                // 00 1100xx not 1111: LDR (immediate) prepost
                     || ((op1_field == 0x0) && ((op2_field & 0x3C) == 0x30))
                 ) {
-                    fields.type = INST_T32_LDR_IMM;
-                    fields.rn = rn;
-                    fields.rd = (instruction >> 12) & 0xF;
-                    fields.imm = instruction & 0xFFF;
+                    fields.type = INST_T32_LDR_PRE_POST;
+                    fields.imm = instruction & 0xFF;
+                    fields.pre_indexed = (instruction & 0x400) != 0;
+                    fields.negative_offset = (instruction & 0x200) == 0;
+                    fields.writeback = (instruction & 0x100) != 0;
                     fields.load_store_bit = 1;
                     return fields;
                 }
@@ -2060,8 +2203,6 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                 else if (op2_field == 0)
                 {
                     fields.type = INST_T32_LDR_REG;
-                    fields.rn = rn;
-                    fields.rd = (instruction >> 12) & 0xF;
                     fields.rm = instruction & 0xF;
                     fields.shift_amount = (instruction >> 4) & 0x3;
                     fields.load_store_bit = 1;
@@ -2071,22 +2212,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                 else if ((op2_field & 0x3C) == 0x38)
                 {
                     fields.type = INST_T32_LDRT;
-                    fields.rn = rn;
-                    fields.rd = (instruction >> 12) & 0xF;
                     fields.imm = instruction & 0xFF;  // 8-bit immediate
-                    fields.load_store_bit = 1;
-                    return fields;
-                }
-                // 10 xxxxxx not 1111: LDR (immediate with pre/post-index)
-                else if ((op1_field == 0x2))
-                {
-                    fields.type = INST_T32_LDR_PRE_POST;
-                    fields.rn = rn;
-                    fields.rd = (instruction >> 12) & 0xF;
-                    fields.imm = instruction & 0xFF;  // 8-bit immediate
-                    fields.pre_indexed = (instruction & 0x400) != 0;  // P bit
-                    fields.negative_offset = (instruction & 0x200) != 0;  // U bit (inverted)
-                    fields.writeback = (instruction & 0x100) != 0;  // W bit
                     fields.load_store_bit = 1;
                     return fields;
                 }
