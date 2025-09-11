@@ -242,6 +242,17 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << ext_names[op] << "\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
         }
+
+        // T16 Reverse instructions
+        case INST_T16_REV:
+            oss << "rev\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
+            break;
+        case INST_T16_REV16:
+            oss << "rev16\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
+            break;
+        case INST_T16_REVSH:
+            oss << "revsh\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
+            break;
             
         // T16 Hi Register Operations
         case INST_T16_ADD_HI:
@@ -433,13 +444,13 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << format_t32_data_proc_reg("and", false, fields.rd, fields.rn, fields.rm, fields.shift_type, fields.shift_amount);
             break;
         case INST_T32_ANDS_REG:
-            oss << format_t32_data_proc_reg("and", true, fields.rd, fields.rn, fields.rm, fields.shift_type, fields.shift_amount);
+            oss << format_t32_data_proc_reg("ands", true, fields.rd, fields.rn, fields.rm, fields.shift_type, fields.shift_amount);
             break;
         case INST_T32_ORR_REG:
             oss << format_t32_data_proc_reg("orr", false, fields.rd, fields.rn, fields.rm, fields.shift_type, fields.shift_amount);
             break;
         case INST_T32_ORRS_REG:
-            oss << format_t32_data_proc_reg("orr", true, fields.rd, fields.rn, fields.rm, fields.shift_type, fields.shift_amount);
+            oss << format_t32_data_proc_reg("orrs", true, fields.rd, fields.rn, fields.rm, fields.shift_type, fields.shift_amount);
             break;
         case INST_T32_EOR_REG:
             oss << format_t32_data_proc_reg("eor", false, fields.rd, fields.rn, fields.rm, fields.shift_type, fields.shift_amount);
@@ -449,7 +460,10 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << (fields.type == INST_T32_MOVS_REG ? "movs.w" : "mov.w")
                 << cond_suffix(fields.cond) << "\t" << reg_name(fields.rd)
                 << ", " << reg_name(fields.rm);
-            //append_shift_suffix(oss, fields);
+            if (fields.shift_amount > 0) {
+                const char* shift_names[] = {"lsl", "lsr", "asr", "ror"};
+                oss << ", " << shift_names[fields.shift_type & 0x3] << " #" << std::to_string(fields.shift_amount);
+            }
             break;
         case INST_T32_MVN_REG:
         case INST_T32_MVNS_REG:
@@ -713,6 +727,34 @@ static std::string format_instruction(const InstructionFields& fields) {
         case INST_T32_SMLAL:
             oss << "smlal\t" << reg_name(fields.rd) << ", " << (int)fields.rs << ", " << reg_name(fields.rn) << ", " << reg_name(fields.rm);
             break;
+#endif
+
+#if HAS_SATURATING_ARITHMETIC
+        // T32 Saturating Arithmetic
+        case INST_T32_SSAT: {
+            // SSAT Rd, #imm, Rm [, shift]
+            uint32_t sat_imm = (fields.imm >> 16) & 0x1F;   // Saturation limit
+            uint32_t shift_type = (fields.imm >> 8) & 0x1;  // Shift type (0=LSL, 1=ASR)
+            uint32_t shift_amount = fields.imm & 0x7F;      // Shift amount
+            
+            oss << "ssat\t" << reg_name(fields.rd) << ", #" << sat_imm << ", " << reg_name(fields.rn);
+            if (shift_amount > 0) {
+                oss << ", " << (shift_type ? "asr" : "lsl") << " #" << shift_amount;
+            }
+            break;
+        }
+        case INST_T32_USAT: {
+            // USAT Rd, #imm, Rm [, shift]
+            uint32_t sat_imm = (fields.imm >> 16) & 0x1F;   // Saturation limit
+            uint32_t shift_type = (fields.imm >> 8) & 0x1;  // Shift type (0=LSL, 1=ASR)
+            uint32_t shift_amount = fields.imm & 0x7F;      // Shift amount
+            
+            oss << "usat\t" << reg_name(fields.rd) << ", #" << sat_imm << ", " << reg_name(fields.rn);
+            if (shift_amount > 0) {
+                oss << ", " << (shift_type ? "asr" : "lsl") << " #" << shift_amount;
+            }
+            break;
+        }
 #endif
 
         // T32 System Instructions
@@ -1053,6 +1095,12 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T16_EXTEND:
             pc_changed = execute_extend(fields);
             break;
+        // Reverse instructions
+        case INST_T16_REV:
+        case INST_T16_REV16:
+        case INST_T16_REVSH:
+            pc_changed = execute_rev(fields);
+            break;
         // CPS instructions
         case INST_T16_CPS:
             pc_changed = execute_cps(fields);
@@ -1168,10 +1216,10 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_SBCS_REG:
         case INST_T32_RSB_REG:
         case INST_T32_RSBS_REG:
-    case INST_T32_MOV_REG:
-    case INST_T32_MOVS_REG:
-    case INST_T32_MVN_REG:
-    case INST_T32_MVNS_REG:
+        case INST_T32_MOV_REG:
+        case INST_T32_MOVS_REG:
+        case INST_T32_MVN_REG:
+        case INST_T32_MVNS_REG:
         case INST_T32_PKH_REG:
         case INST_T32_TST_REG:
         case INST_T32_TEQ_REG:
@@ -2254,6 +2302,47 @@ bool Execute::execute_extend(const InstructionFields& fields)
     return false;
 }
 
+bool Execute::execute_rev(const InstructionFields& fields)
+{
+    uint32_t source_value = m_registers->read_register(fields.rm);
+    uint32_t result = 0;
+    
+    switch (fields.type) {
+        case INST_T16_REV: {
+            // Reverse byte order in word
+            result = ((source_value & 0xFF000000) >> 24) |
+                     ((source_value & 0x00FF0000) >> 8)  |
+                     ((source_value & 0x0000FF00) << 8)  |
+                     ((source_value & 0x000000FF) << 24);
+            LOG_DEBUG("REV: " + hex32(source_value) + " -> " + hex32(result));
+            break;
+        }
+        case INST_T16_REV16: {
+            // Reverse bytes in each halfword
+            result = ((source_value & 0xFF000000) >> 8)  |
+                     ((source_value & 0x00FF0000) << 8)  |
+                     ((source_value & 0x0000FF00) >> 8)  |
+                     ((source_value & 0x000000FF) << 8);
+            LOG_DEBUG("REV16: " + hex32(source_value) + " -> " + hex32(result));
+            break;
+        }
+        case INST_T16_REVSH: {
+            // Reverse bytes in bottom halfword and sign extend to 32 bits
+            uint16_t halfword = source_value & 0xFFFF;
+            uint16_t reversed = ((halfword & 0xFF00) >> 8) | ((halfword & 0x00FF) << 8);
+            result = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(reversed)));
+            LOG_DEBUG("REVSH: " + hex32(source_value) + " -> " + hex32(result));
+            break;
+        }
+        default:
+            LOG_ERROR("Unknown REV instruction type: " + std::to_string(fields.type));
+            return false;
+    }
+    
+    m_registers->write_register(fields.rd, result);
+    return false;
+}
+
 bool Execute::execute_memory_barrier(const InstructionFields& fields)
 {
     // Memory barriers are typically no-ops in a single-core simulation
@@ -2768,7 +2857,7 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 - operand2;
             carry = operand1 >= operand2;
             overflow = ((operand1 ^ operand2) & (operand1 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("CMP.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("CMP.W " + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, carry, overflow);
             return false;
             
@@ -2776,19 +2865,19 @@ bool Execute::execute_t32_data_processing(const InstructionFields& fields)
             result = operand1 + operand2;
             carry = result < operand1;
             overflow = ((operand1 ^ result) & (operand2 ^ result) & 0x80000000) != 0;
-            LOG_DEBUG("CMN.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("CMN.W " + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, carry, overflow);
             return false;
             
         case INST_T32_TST_IMM:
             result = operand1 & operand2;
-            LOG_DEBUG("TST.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("TST.W " + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, false, false);
             return false;
             
         case INST_T32_TEQ_IMM:
             result = operand1 ^ operand2;
-            LOG_DEBUG("TEQ.W r" + reg_name(fields.rn) + ", #" + hex32(operand2));
+            LOG_DEBUG("TEQ.W " + reg_name(fields.rn) + ", #" + hex32(operand2));
             update_flags(result, false, false);
             return false;
 
@@ -3652,23 +3741,20 @@ bool Execute::execute_saturate(const InstructionFields& fields)
     
     uint32_t src = m_registers->read_register(fields.rn);
     uint32_t sat_imm = (fields.imm >> 16) & 0x1F;   // Saturation limit
+    uint32_t shift_type = (fields.imm >> 8) & 0x1;  // Shift type
     uint32_t shift = fields.imm & 0x7F;             // Shift amount
     
     // Apply shift first (if any)
-    uint32_t shifted_value = src;
-    if (shift > 0) {
-        shifted_value = src << shift;
-    }
-    
-    uint32_t result;
+    uint32_t shifted_value = shift_type ? (src >> shift) : (src << shift); // 1: right shift, 0: left shift
+    int32_t signed_value = (int32_t)shifted_value;
     bool saturated = false;
-    
+    uint32_t result;
+
     if (fields.type == INST_T32_SSAT) {
         // SSAT - Signed Saturate
-        int32_t signed_value = (int32_t)shifted_value;
-        int32_t max_val = (1 << sat_imm) - 1;
-        int32_t min_val = -(1 << sat_imm);
-        
+        int32_t max_val = (1 << (sat_imm - 1)) - 1;
+        int32_t min_val = -(1 << (sat_imm - 1));
+
         if (signed_value > max_val) {
             result = max_val;
             saturated = true;
@@ -3679,23 +3765,27 @@ bool Execute::execute_saturate(const InstructionFields& fields)
             result = signed_value;
         }
         
-        LOG_DEBUG("SSAT: value=" + std::to_string(signed_value) + ", limit=±" + std::to_string(max_val) + 
-                 ", result=" + std::to_string((int32_t)result) + (saturated ? " (saturated)" : ""));
+        LOG_DEBUG("SSAT: value=" + std::to_string(signed_value) + ", [" + std::to_string(min_val) + ", " + std::to_string(max_val) + 
+                 "], result=" + std::to_string((int32_t)result) + (saturated ? " (saturated)" : ""));
     } else {
-        // USAT - Unsigned Saturate  
-        uint32_t max_val = (1U << sat_imm) - 1;
-        
-        if (shifted_value > max_val) {
+        // USAT - Unsigned Saturate
+        int32_t max_val = (1U << sat_imm) - 1;
+        int32_t min_val = 0;
+
+        if (signed_value > max_val) {
             result = max_val;
             saturated = true;
+        } else if (signed_value < min_val) {
+            result = min_val;
+            saturated = true;
         } else {
-            result = shifted_value;
+            result = signed_value;
         }
         
-        LOG_DEBUG("USAT: value=" + std::to_string(shifted_value) + ", limit=" + std::to_string(max_val) + 
-                 ", result=" + std::to_string(result) + (saturated ? " (saturated)" : ""));
+        LOG_DEBUG("USAT: value=" + std::to_string(shifted_value) + ", [" + std::to_string(min_val) + ", " + std::to_string(max_val) + 
+                 "], result=" + std::to_string(result) + (saturated ? " (saturated)" : ""));
     }
-    
+
     m_registers->write_register(fields.rd, result);
     
     // Set Q flag in APSR if saturation occurred

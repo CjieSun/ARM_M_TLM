@@ -97,6 +97,11 @@ enum InstructionType {
     // --- T16: Extend instructions --- (Format 12 subset)
     INST_T16_EXTEND,            // SXTH, SXTB, UXTH, UXTB
     
+    // --- T16: Reverse instructions --- (Format 12 subset)
+    INST_T16_REV,               // REV Rd, Rm
+    INST_T16_REV16,             // REV16 Rd, Rm
+    INST_T16_REVSH,             // REVSH Rd, Rm
+    
     // --- T16: Change Processor State --- (Format 12 subset)
     INST_T16_CPS,               // CPSIE/CPSID
 
@@ -345,7 +350,9 @@ enum InstructionType {
 #if HAS_SATURATING_ARITHMETIC
     // --- T32: Saturating Arithmetic (ARMv7-M+) ---
     INST_T32_SSAT,              // SSAT Rd, #imm, Rn
+    INST_T32_SSAT16,            // SSAT16 Rd, #imm, Rn
     INST_T32_USAT,              // USAT Rd, #imm, Rn
+    INST_T32_USAT16,            // USAT16 Rd, #imm, Rn
 #endif
 
 #if HAS_BIT_MANIPULATION
