@@ -19,6 +19,118 @@
 @ - Advanced load/store (LDR.W, STR.W with various modes)
 @ - Wide branch instructions (B.W, BL.W)
 
+@ Debug output address
+.equ DEBUG_ADDR, 0x40000000
+.align 4
+@ Debug print functions
+@ Print a single character to debug output
+debug_putchar:
+    ldr r1, =DEBUG_ADDR
+    strb r0, [r1]
+    bx lr
+
+@ Print a string (r0 = address, r1 = length)
+debug_print:
+    push {r2, r3, lr}
+    mov r2, r0          @ String address
+    mov r3, r1          @ Length
+    ldr r1, =DEBUG_ADDR
+debug_print_loop:
+    cmp r3, #0
+    beq debug_print_done
+    ldrb r0, [r2]
+    strb r0, [r1]
+    adds r2, #1
+    subs r3, #1
+    b debug_print_loop
+debug_print_done:
+    pop {r2, r3, pc}
+
+@ Print error message for failed test
+debug_print_error:
+    push {lr}
+    ldr r0, =error_msg
+    movs r1, #7         @ Length of "ERROR: "
+    bl debug_print
+    pop {pc}
+
+@ Print test name before running test
+debug_print_test:
+    push {lr}
+    ldr r0, =test_msg
+    movs r1, #6         @ Length of "TEST: "
+    bl debug_print
+    pop {pc}
+
+@ Print success message
+debug_print_ok:
+    push {lr}
+    ldr r0, =ok_msg
+    movs r1, #4         @ Length of "OK\r\n"
+    bl debug_print
+    pop {pc}
+
+@ Print hex nibble (0-F)
+debug_print_hex_nibble:
+    and r0, r0, #0xF
+    cmp r0, #9
+    ble debug_print_digit
+    adds r0, #7         @ A-F
+debug_print_digit:
+    adds r0, #'0'
+    b debug_putchar
+
+@ Print 32-bit hex value (r0 = value)
+debug_print_hex32:
+    push {r2, r3, lr}
+    mov r2, r0
+    movs r3, #8         @ 8 hex digits
+debug_hex32_loop:
+    mov r0, r2
+    lsrs r0, r0, #28    @ Get top nibble
+    bl debug_print_hex_nibble
+    lsls r2, r2, #4     @ Shift left 4 bits
+    subs r3, #1
+    bne debug_hex32_loop
+    pop {r2, r3, pc}
+
+@ Print PC address when error occurs
+@ Call this function right after the failing instruction
+debug_print_error_pc:
+    push {lr}
+    bl debug_print_error
+    
+    @ Print "AT PC: "
+    ldr r0, =pc_msg
+    movs r1, #7         @ Length of "AT PC: "
+    bl debug_print
+    
+    @ Get return address (PC where error occurred)
+    mov r0, lr
+    subs r0, #4         @ Adjust for pipeline
+    bl debug_print_hex32
+    
+    bl debug_print_newline
+    pop {pc}
+
+@ Print newline
+debug_print_newline:
+    push {lr}
+    movs r0, #13        @ CR
+    bl debug_putchar
+    movs r0, #10        @ LF
+    bl debug_putchar
+    pop {pc}
+
+@ String constants
+@ String constants
+.align 2
+error_msg:  .ascii "ERROR: "
+test_msg:   .ascii "TEST: "
+ok_msg:     .ascii "OK\r\n"
+pc_msg:     .ascii "AT PC: "
+
+.align 4
 _start:
     @ Initialize stack pointer
     movs r0, #1
@@ -66,14 +178,35 @@ _start:
     
     @ === SATURATING ARITHMETIC TESTS ===
     bl test_saturating_arithmetic
+    bl test_table_branch
+    bl test_complete_data_processing
+    bl test_complete_logical_operations  
+    bl test_complete_compare_test
+    bl test_stack_operations
+    bl test_immediate_construction
+    bl test_complete_branch_variants
+    bl test_misc_instructions
     
-    @ All tests completed successfully
-    movs r0, #0x00         @ Success code
-    b infinite_loop
+    bl test_memory_barriers
+    bl test_system_registers
+    bl test_advanced_bitfield
+    bl test_debug_special
+    bl test_complex_addressing
+    bl test_complex_it_blocks
+    bl test_performance_patterns
 
-@ Test IT (If-Then) conditional execution blocks
+    @ Test complete - success
+    movs r0, #0x99
+    b .@ Test IT (If-Then) conditional execution blocks
 test_it_blocks:
     push {lr}
+    
+    @ Print test name
+    bl debug_print_test
+    ldr r0, =it_test_name
+    movs r1, #9         @ Length of "IT_BLOCKS"
+    bl debug_print
+    bl debug_print_newline
     
     @ Test simple IT block - IT EQ (if equal)
     movs r0, #5
@@ -83,6 +216,10 @@ test_it_blocks:
     it eq                  @ If equal, execute next instruction
     moveq r2, #0xAA        @ Should execute (r0 == r1)
     
+    @ Verify result
+    cmp r2, #0xAA
+    bne it_test_error
+    
     @ Test IT block with different condition - IT NE (if not equal)
     movs r0, #5
     movs r1, #10
@@ -90,6 +227,10 @@ test_it_blocks:
     
     it ne                  @ If not equal, execute next instruction
     movne r3, #0xBB        @ Should execute (r0 != r1)
+    
+    @ Verify result
+    cmp r3, #0xBB
+    bne it_test_error
     
     @ Test 2-instruction IT block - ITE (If-Then-Else)
     movs r0, #8
@@ -99,6 +240,12 @@ test_it_blocks:
     ite lt                 @ If less than, then else
     movlt r4, #0xCC        @ Should execute (condition true)
     movge r5, #0xDD        @ Should NOT execute (condition false)
+    
+    @ Verify results
+    cmp r4, #0xCC
+    bne it_test_error
+    cmp r5, #0xDD          @ r5 should NOT be 0xDD
+    beq it_test_error
     
     @ Test 3-instruction IT block - ITEE (If-Then-Else-Else)
     movs r0, #15
@@ -110,6 +257,24 @@ test_it_blocks:
     movle r7, #0xFF        @ Should NOT execute (condition false)
     movle r8, #0x11        @ Should NOT execute (condition false)
     
+    @ Verify results
+    cmp r6, #0xEE
+    bne it_test_error
+    cmp r7, #0xFF          @ r7 should NOT be 0xFF
+    beq it_test_error
+    cmp r8, #0x11          @ r8 should NOT be 0x11
+    beq it_test_error
+    
+    @ Test passed
+    bl debug_print_ok
+    pop {pc}
+
+it_test_error:
+    bl debug_print_error
+    ldr r0, =it_error_msg
+    movs r1, #17          @ Length of "IT_BLOCKS FAILED"
+    bl debug_print
+    bl debug_print_newline
     pop {pc}
 
 @ Test byte load/store operations (STRB/LDRB)
@@ -265,12 +430,54 @@ multiply_test_end:
 test_t32_data_processing:
     push {lr}
     
+    @ Print test name
+    bl debug_print_test
+    ldr r0, =t32_test_name
+    movs r1, #15         @ Length of "T32_DATA_PROC"
+    bl debug_print
+    bl debug_print_newline
+    
     @ Test ADD.W with immediate (32-bit immediate support)
     ldr r0, =0x12345678    @ Load large immediate
     add.w r1, r0, #0x1000  @ ADD.W with 12-bit immediate
     
     @ Test SUB.W with immediate  
     sub.w r2, r1, #0x678   @ SUB.W with 12-bit immediate
+    
+    @ Test ADC.W with register (newly fixed)
+    movs r3, #0x10
+    movs r4, #0x20
+    movs r5, #0x20000000   @ Carry flag bit
+    msr apsr_nzcvq, r5     @ Set C flag  
+    adc.w r6, r3, r4       @ ADC.W r6, r3, r4 -> r6 = 0x10 + 0x20 + 1 = 0x31
+    
+    cmp r6, #0x31
+    bne t32_adc_error
+    
+    @ Test ORN.W with register (newly fixed)  
+    movs r7, #0xFF
+    movs r8, #0x0F
+    orn.w r9, r7, r8       @ ORN.W r9, r7, r8 -> r9 = 0xFF | (~0x0F) = 0xFF | 0xFFFFFFF0 = 0xFFFFFFFF
+    
+    ldr r1, =0xFFFFFFFF
+    cmp r9, r1
+    bne t32_orn_reg_error
+    
+    @ Test ORN.W with immediate (newly fixed)
+    movs r10, #0x55
+    orn.w r11, r10, #0xFF  @ ORN.W r11, r10, #255 -> r11 = 0x55 | (~0xFF) = 0x55 | 0xFFFFFF00 = 0xFFFFFF55
+    
+    ldr r1, =0xFFFFFF55
+    cmp r11, r1
+    bne t32_orn_imm_error
+    
+    @ Test TEQ.W with register (newly fixed)
+    movs r0, #0xAA
+    movs r1, #0x55
+    teq.w r0, r1           @ TEQ.W r0, r1 -> should set flags based on r0 ^ r1
+    
+    @ Test NOP.W (newly fixed)
+    nop.w                  @ Should do nothing
     
     @ Test MOV.W with immediate (can encode any 32-bit value)
     mov.w r3, #0x5A5A      @ MOV.W with immediate
@@ -290,7 +497,41 @@ test_t32_data_processing:
     cmp.w r0, #0xFF        @ CMP.W with 8-bit immediate
     tst.w r3, #0xFF00      @ TST.W with immediate
     
+    @ Test passed
+    bl debug_print_ok
     movs r0, #0x99         @ Success
+    pop {pc}
+
+t32_adc_error:
+    bl debug_print_error_pc
+    ldr r0, =adc_error_msg
+    movs r1, #14          @ Length of "ADC.W FAILED"
+    bl debug_print
+    bl debug_print_newline
+    pop {pc}
+
+t32_orn_reg_error:
+    bl debug_print_error_pc
+    ldr r0, =orn_reg_error_msg
+    movs r1, #18          @ Length of "ORN.W REG FAILED"
+    bl debug_print
+    bl debug_print_newline
+    pop {pc}
+
+t32_orn_imm_error:
+    bl debug_print_error_pc
+    ldr r0, =orn_imm_error_msg
+    movs r1, #18          @ Length of "ORN.W IMM FAILED"
+    bl debug_print
+    bl debug_print_newline
+    pop {pc}
+
+t32_test_error:
+    bl debug_print_error_pc
+    ldr r0, =t32_error_msg
+    movs r1, #20          @ Length of "T32_DATA_PROC FAILED"
+    bl debug_print
+    bl debug_print_newline
     pop {pc}
 
 @ Test bitfield instructions (ARMv7-M feature)
@@ -635,9 +876,414 @@ saturating_test_fail:
 saturating_test_end:
     pop {pc}
 
-@ Infinite loop for test completion
-infinite_loop:
-    b infinite_loop
+@ ===== Table Branch Instructions Test =====
+test_table_branch:
+    push {lr}
+    
+    @ Test TBB (Table Branch Byte)
+    @ Jump table based on byte offsets
+    adr r0, tbb_table_base
+    movs r1, #2                    @ Index for jump table
+    tbb [r0, r1]                   @ Branch using byte table
+    
+    @ Should not reach here if TBB worked
+    movs r0, #0xBA
+    b table_branch_end
+
+tbb_target_0:
+    movs r2, #0x10                 @ Mark we reached target 0
+    b tbb_continue
+    
+tbb_target_1:  
+    movs r2, #0x20                 @ Mark we reached target 1
+    b tbb_continue
+    
+tbb_target_2:
+    movs r2, #0x30                 @ Mark we reached target 2
+    b tbb_continue
+
+tbb_continue:
+    @ Test TBH (Table Branch Halfword)
+    @ Jump table based on halfword offsets
+    adr r0, tbh_table_base
+    movs r1, #1                    @ Index for jump table
+    tbh [r0, r1, lsl #1]          @ Branch using halfword table
+    
+    @ Should not reach here if TBH worked
+    movs r0, #0xBA
+    b table_branch_end
+
+tbh_target_0:
+    movs r3, #0x40                 @ Mark we reached target 0
+    b table_branch_success
+    
+tbh_target_1:
+    movs r3, #0x50                 @ Mark we reached target 1  
+    b table_branch_success
+
+table_branch_success:
+    movs r0, #0x99                 @ Success
+    b table_branch_end
+    
+table_branch_end:
+    pop {pc}
+
+@ Jump tables for TBB/TBH tests
+.align 2
+tbb_table_base:
+    .byte (tbb_target_0 - tbb_table_base)/2  @ Offset to target 0
+    .byte (tbb_target_1 - tbb_table_base)/2  @ Offset to target 1
+    .byte (tbb_target_2 - tbb_table_base)/2  @ Offset to target 2
+    .byte 0                                   @ Padding for alignment
+
+.align 2  
+tbh_table_base:
+    .hword (tbh_target_0 - tbh_table_base)/2 @ Offset to target 0
+    .hword (tbh_target_1 - tbh_table_base)/2 @ Offset to target 1
+
+@ ===== Complete Data Processing Instructions Test =====
+test_complete_data_processing:
+    push {lr}
+    
+    @ Test ADC (Add with Carry) variants
+    movs r0, #10
+    movs r1, #20
+    movs r2, #1
+    adds r3, r0, r1               @ Set carry flag
+    adc r4, r0, r1                @ Add with carry (T16)
+    adc.w r5, r0, r1              @ Add with carry (T32)
+    adc r6, r0, #5                @ Add immediate with carry
+    
+    @ Test SBC (Subtract with Carry) variants  
+    movs r7, #30
+    movs r8, #10
+    subs r9, r7, r8               @ Set carry flag (no borrow)
+    sbc r10, r7, r8               @ Subtract with carry (T16)
+    sbc.w r11, r7, r8             @ Subtract with carry (T32)
+    sbc r12, r7, #5               @ Subtract immediate with carry
+    
+    @ Test RSB (Reverse Subtract)
+    rsb r0, r1, #0                @ Negate r1
+    rsb.w r2, r3, #100            @ 100 - r3
+    rsb r4, r5, r6                @ r6 - r5
+    
+    @ Test conditional data processing
+    cmp r0, r1
+    it gt
+    addgt r0, r0, #1              @ Conditional add
+    
+    it le  
+    suble r1, r1, #1              @ Conditional subtract
+    
+    movs r0, #0x99                @ Success
+    pop {pc}
+
+@ ===== Complete Logical Operations Test =====
+test_complete_logical_operations:
+    push {lr}
+    
+    @ Test AND variants
+    ldr r0, =0x12345678
+    ldr r1, =0x0F0F0F0F
+    and r2, r0, r1                @ AND register (T16)
+    and.w r3, r0, r1              @ AND register (T32)
+    and r4, r0, #0xFF             @ AND immediate
+    ands r5, r0, r1               @ AND with flags update
+    
+    @ Test ORR variants
+    ldr r6, =0x11111111
+    ldr r7, =0x22222222
+    orr r8, r6, r7                @ ORR register
+    orr.w r9, r6, r7              @ ORR register (T32)
+    orr r10, r6, #0xFF            @ ORR immediate
+    orrs r11, r6, r7              @ ORR with flags update
+    
+    @ Test EOR variants
+    ldr r0, =0xAAAAAAAA
+    ldr r1, =0x55555555
+    eor r2, r0, r1                @ EOR register
+    eor.w r3, r0, r1              @ EOR register (T32)
+    eor r4, r0, #0xFF             @ EOR immediate
+    eors r5, r0, r1               @ EOR with flags update
+    
+    @ Test BIC variants  
+    ldr r6, =0xFFFFFFFF
+    ldr r7, =0x0F0F0F0F
+    bic r8, r6, r7                @ BIC register
+    bic.w r9, r6, r7              @ BIC register (T32)
+    bic r10, r6, #0xFF            @ BIC immediate
+    bics r11, r6, r7              @ BIC with flags update
+    
+    @ Test ORN (OR NOT)
+    orn r0, r1, r2                @ OR with inverted operand
+    orn r3, r4, #0xFF             @ OR NOT immediate
+    
+    movs r0, #0x99                @ Success
+    pop {pc}
+
+@ ===== Complete Compare and Test Instructions =====
+test_complete_compare_test:
+    push {lr}
+    
+    @ Test CMP variants
+    movs r0, #10
+    movs r1, #20
+    cmp r0, r1                    @ Compare register (T16)
+    cmp.w r0, r1                  @ Compare register (T32)
+    cmp r0, #15                   @ Compare immediate (T16)
+    cmp.w r0, #0x5500             @ Compare immediate (T32) - valid modified immediate
+    
+    @ Test CMN (Compare Negative)
+    movs r2, #5
+    movs r3, #-5  
+    cmn r2, r3                    @ Compare negative register
+    cmn r2, #10                   @ Compare negative immediate
+    
+    @ Test TST (Test) - logical AND with flags update
+    ldr r4, =0x12345678
+    ldr r5, =0x0000FF00
+    tst r4, r5                    @ Test register
+    tst r4, #0xFF                 @ Test immediate
+    
+    @ Test TEQ (Test Equivalence) - logical EOR with flags update
+    ldr r6, =0xAAAAAAAA
+    ldr r7, =0xAAAAAAAA
+    teq r6, r7                    @ Test equivalence register
+    teq r6, #0xAA                 @ Test equivalence immediate
+    
+    @ Test various condition code settings
+    movs r0, #0
+    cmp r0, #0                    @ Set Z flag
+    
+    movs r1, #-1
+    cmp r1, #0                    @ Set N flag
+    
+    movs r2, #0xFFFFFFFF
+    adds r2, r2, #1               @ Set C flag (overflow)
+    
+    movs r0, #0x99                @ Success
+    pop {pc}
+
+@ ===== Stack Operations Test =====  
+test_stack_operations:
+    push {lr}
+    
+    @ Test various PUSH variants
+    movs r0, #0x11
+    movs r1, #0x22
+    movs r2, #0x33
+    movs r3, #0x44
+    
+    push {r0}                     @ Push single register
+    push {r0, r1}                 @ Push multiple registers
+    push {r0-r3}                  @ Push register range
+    push {r0, r2, r3}             @ Push non-consecutive registers
+    push {r4-r11}                 @ Push high registers
+    push {r0-r3, r12, lr}         @ Push mixed registers
+    
+    @ Test various POP variants
+    pop {r0-r3, r12, lr}          @ Pop mixed registers
+    pop {r4-r11}                  @ Pop high registers
+    pop {r0, r2, r3}              @ Pop non-consecutive registers
+    pop {r0-r3}                   @ Pop register range
+    pop {r0, r1}                  @ Pop multiple registers
+    pop {r0}                      @ Pop single register
+    
+    @ Test stack pointer operations
+    mrs r4, msp                   @ Read main stack pointer
+    mrs r5, psp                   @ Read process stack pointer
+    
+    add r6, sp, #16               @ Add to stack pointer
+    sub r7, sp, #16               @ Subtract from stack pointer
+    
+    @ Test VPUSH/VPOP (if FPU available)
+    @ vpush {s0-s3}              @ Uncomment if FPU supported
+    @ vpop {s0-s3}               @ Uncomment if FPU supported
+    
+    movs r0, #0x99                @ Success
+    pop {pc}
+
+@ ===== Immediate Construction Test =====
+test_immediate_construction:
+    push {lr}
+    
+    @ Test MOV immediate variants
+    mov r0, #0x55                 @ Simple immediate (T16)
+    mov.w r1, #0x5500             @ Complex immediate (T32) - valid modified immediate
+    movs r2, #0xFF                @ MOV with flags (T16)
+    
+    @ Test MOVW (Move Wide) - load 16-bit immediate
+    movw r3, #0x1234              @ Load lower 16 bits
+    movw r4, #0xABCD              @ Another 16-bit value
+    
+    @ Test MOVT (Move Top) - load upper 16 bits
+    movt r3, #0x5678              @ Load upper 16 bits
+    movt r4, #0xEF01              @ Another upper 16-bit value
+    
+    @ Now r3 should contain 0x56781234
+    @ Now r4 should contain 0xEF01ABCD
+    
+    @ Test MVN (Move NOT) variants
+    mvn r5, #0                    @ Load 0xFFFFFFFF
+    mvn r6, r0                    @ Bitwise NOT of register
+    mvn.w r7, #0x5500             @ MVN with complex immediate - valid modified immediate
+    mvns r8, r5                   @ MVN with flags update
+    
+    @ Verify immediate construction worked
+    ldr r9, =0x56781234
+    cmp r3, r9
+    bne immediate_test_fail
+    
+    ldr r10, =0xEF01ABCD
+    cmp r4, r10
+    bne immediate_test_fail
+    
+    movs r0, #0x99                @ Success
+    b immediate_test_end
+    
+immediate_test_fail:
+    movs r0, #0xBA                @ Error code
+    
+immediate_test_end:
+    pop {pc}
+
+@ ===== Complete Branch Variants Test =====
+test_complete_branch_variants:
+    push {lr}
+    
+    @ Test conditional branches (T16)
+    movs r0, #5
+    movs r1, #5
+    cmp r0, r1
+    beq branch_eq_target          @ Branch if equal
+    b branch_test_fail            @ Should not reach here
+    
+branch_eq_target:
+    movs r0, #10
+    movs r1, #5
+    cmp r0, r1
+    bgt branch_gt_target          @ Branch if greater
+    b branch_test_fail
+    
+branch_gt_target:  
+    movs r0, #3
+    movs r1, #5
+    cmp r0, r1
+    blt branch_lt_target          @ Branch if less
+    b branch_test_fail
+    
+branch_lt_target:
+    @ Test unconditional branch variants
+    b.w branch_wide_target        @ 32-bit branch
+    b branch_test_fail
+
+branch_wide_target:
+    @ Test branch with link variants
+    bl branch_subroutine          @ Call subroutine
+    cmp r2, #0xCC                 @ Check return value
+    bne branch_test_fail
+    
+    bl.w branch_wide_subroutine   @ 32-bit call
+    cmp r3, #0xDD                 @ Check return value
+    bne branch_test_fail
+    
+    @ Test BX/BLX (Branch/Branch with Link and eXchange)
+    adr r4, branch_thumb_target+1 @ Thumb address
+    bx r4                         @ Branch and exchange
+    b branch_test_fail            @ Should not reach here
+
+branch_thumb_target:
+    movs r5, #0xEE                @ Mark we reached here
+    
+    @ Test BLX register
+    adr r6, branch_return_point+1
+    mov lr, r6                    @ Set return address
+    adr r7, blx_target+1
+    blx r7                        @ Branch with link and exchange
+    
+branch_return_point:
+    cmp r8, #0xFF                 @ Check BLX worked
+    bne branch_test_fail
+    
+    movs r0, #0x99                @ Success
+    b branch_test_end
+    
+branch_subroutine:
+    movs r2, #0xCC                @ Mark subroutine called
+    bx lr                         @ Return
+    
+branch_wide_subroutine:
+    movs r3, #0xDD                @ Mark wide subroutine called
+    bx lr                         @ Return
+    
+blx_target:
+    movs r8, #0xFF                @ Mark BLX target reached
+    bx lr                         @ Return
+
+branch_test_fail:
+    movs r0, #0xBA                @ Error code
+    
+branch_test_end:
+    pop {pc}
+
+@ ===== Miscellaneous Instructions Test =====
+test_misc_instructions:
+    push {lr}
+    
+    @ Test hint instructions
+    nop                           @ No operation (T16)
+    nop.w                         @ No operation (T32)
+    yield                         @ Yield hint
+    wfe                           @ Wait for event
+    wfi                           @ Wait for interrupt
+    sev                           @ Send event
+    @sevl                          @ Send event local (if supported)
+    
+    @ Test CPSIE/CPSID (Change Processor State)
+    cpsid i                       @ Disable interrupts
+    cpsie i                       @ Enable interrupts
+    cpsid f                       @ Disable faults  
+    cpsie f                       @ Enable faults
+    cpsid if                      @ Disable interrupts and faults
+    cpsie if                      @ Enable interrupts and faults
+    
+    @ Test SETEND (Set Endianness) - if supported
+    @ setend le                   @ Little endian
+    @ setend be                   @ Big endian
+    
+    @ Test IT instruction edge cases
+    movs r0, #1
+    movs r1, #2
+    cmp r0, r1
+    
+    itttt lt                      @ All Then conditions
+    addlt r2, r0, #1              @ Then
+    sublt r3, r1, #1              @ Then
+    movlt r4, #10                 @ Then
+    movlt r5, #20                 @ Then
+    
+    @ Test CBNE/CBZ (Compare and Branch on Zero/Non-Zero)
+    movs r6, #0
+    cbz r6, cbz_target            @ Branch if zero
+    b misc_test_fail
+    
+cbz_target:
+    movs r7, #5
+    cbnz r7, cbnz_target          @ Branch if non-zero
+    b misc_test_fail
+    
+cbnz_target:
+    @ Test UDF (Undefined) - commented out as it would cause exception
+    @ udf #0                     @ Undefined instruction
+    
+    movs r0, #0x99                @ Success
+    b misc_test_end
+    
+misc_test_fail:
+    movs r0, #0xBA                @ Error code
+    
+misc_test_end:
+    pop {pc}
 
 // ===== Additional ARMv7-M Advanced Instructions =====
 
@@ -914,5 +1560,95 @@ workspace:
 .align 2
 end_marker:
     .word 0xDEADC0DE       @ End of data marker
+
+@ ===== Additional Test Data for Comprehensive Testing =====
+
+@ Complex bit patterns for advanced testing
+.align 2
+complex_patterns:
+    .word 0x12345678, 0x9ABCDEF0  @ Sequential patterns
+    .word 0x87654321, 0x0FEDCBA9  @ Reversed patterns  
+    .word 0xFFFF0000, 0x0000FFFF  @ Halfword patterns
+    .word 0xFF00FF00, 0x00FF00FF  @ Byte patterns
+    .word 0xF0F0F0F0, 0x0F0F0F0F  @ Nibble patterns
+    .word 0xAAAAAAAA, 0x55555555  @ Alternating bits
+    .word 0xCCCCCCCC, 0x33333333  @ 2-bit patterns
+    .word 0x80000000, 0x7FFFFFFF  @ Sign bit patterns
+
+@ Floating point test values (for future FPU testing)
+.align 2
+float_test_values:
+    .word 0x3F800000              @ 1.0f  
+    .word 0x40000000              @ 2.0f
+    .word 0xC0000000              @ -2.0f
+    .word 0x7F800000              @ +Infinity
+    .word 0xFF800000              @ -Infinity
+    .word 0x7FC00000              @ NaN
+    .word 0x00000000              @ +0.0f
+    .word 0x80000000              @ -0.0f
+
+@ Saturation test values  
+.align 2
+saturation_values:
+    .word 0x7FFFFFFF              @ Max positive 32-bit
+    .word 0x80000000              @ Min negative 32-bit  
+    .word 0x000000FF              @ Max 8-bit unsigned
+    .word 0x0000007F              @ Max 8-bit signed
+    .word 0x00000080              @ Min 8-bit signed (as unsigned)
+    .word 0x0000FFFF              @ Max 16-bit unsigned
+    .word 0x00007FFF              @ Max 16-bit signed
+    .word 0x00008000              @ Min 16-bit signed (as unsigned)
+
+@ Address calculation test data
+.align 2
+address_test_base:
+    .word 0x20000000              @ RAM base
+    .word 0x40000000              @ Peripheral base
+    .word 0xE0000000              @ System control base
+    .word 0x08000000              @ Flash base
+
+@ Conditional execution test patterns
+.align 2
+condition_test_data:
+    .word 0, 1, -1, 0x80000000    @ Zero, positive, negative, MSB set
+    .word 0x7FFFFFFF, 0xFFFFFFFF  @ Max positive, all bits set
+    
+@ Memory barrier synchronization points  
+.align 2
+sync_points:
+    .word 0x00000000              @ Sync point 0
+    .word 0x11111111              @ Sync point 1  
+    .word 0x22222222              @ Sync point 2
+    .word 0x33333333              @ Sync point 3
+
+@ Exception and interrupt test vectors
+.align 2
+exception_vectors:
+    .word 0x20001000              @ Initial stack pointer
+    .word reset_handler+1         @ Reset handler (Thumb)
+    .word nmi_handler+1           @ NMI handler
+    .word hardfault_handler+1     @ Hard fault handler
+    
+@ Reset handler (minimal)
+reset_handler:
+    b _start
+    
+@ Exception handlers (stubs)  
+nmi_handler:
+    bx lr
+    
+hardfault_handler:
+    b hardfault_handler           @ Infinite loop
+
+@ String constants for debug output
+.align 2
+.align 2
+it_test_name:     .ascii "IT_BLOCKS"
+it_error_msg:     .ascii "IT_BLOCKS FAILED"
+t32_test_name:    .ascii "T32_DATA_PROC"
+t32_error_msg:    .ascii "T32_DATA_PROC FAILED"
+adc_error_msg:    .ascii "ADC.W FAILED"
+orn_reg_error_msg: .ascii "ORN.W REG FAILED"
+orn_imm_error_msg: .ascii "ORN.W IMM FAILED"
 
 @ End of test program

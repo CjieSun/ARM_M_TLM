@@ -244,7 +244,6 @@ enum InstructionType {
     INST_T32_LDRSB_PRE_POST,    // LDRSB.W Rt, [Rn, #imm]! or [Rn], #imm
     INST_T32_LDRH_PRE_POST,     // LDRH.W Rt, [Rn, #imm]! or [Rn], #imm
     INST_T32_LDRSH_PRE_POST,    // LDRSH.W Rt, [Rn, #imm]! or [Rn], #imm
-    INST_T32_LDR_PC,            // LDR.W Rt, [PC, #imm]
     INST_T32_LDRD,              // LDRD Rt, Rt2, [Rn, #imm]
     INST_T32_STRD,              // STRD Rt, Rt2, [Rn, #imm]
     

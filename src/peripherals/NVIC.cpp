@@ -11,6 +11,7 @@ NVIC::NVIC(sc_module_name name) :
     m_stk_load(0),
     m_stk_val(0),
     m_stk_calib(0),
+    m_vtor(0),
     m_iser(0),
     m_icer(0),
     m_ispr(0),
@@ -91,6 +92,9 @@ void NVIC::handle_read(tlm_generic_payload& trans)
             *data_ptr = m_stk_calib; // minimal model
             trans.set_response_status(TLM_OK_RESPONSE);
             goto log_and_return;
+        case NVIC_VTOR:
+            value = m_vtor;
+            break;
         case NVIC_ISER:
             value = m_iser;
             break;
@@ -193,6 +197,9 @@ void NVIC::handle_write(tlm_generic_payload& trans)
             break;
         case NVIC_STK_CALIB:
             // Read-only; ignore writes
+            break;
+        case NVIC_VTOR:
+            m_vtor = value;
             break;
         case NVIC_ISER:
             m_iser |= value;  // Set bits

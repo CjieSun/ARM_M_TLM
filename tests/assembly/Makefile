@@ -11,8 +11,8 @@ OBJDUMP = $(TOOLCHAIN_PREFIX)objdump
 
 # Compiler flags for Cortex-M0 (ARMv6-M)
 # Include -g so ELF keeps symbols for GDB (the simulator consumes HEX separately)
-CFLAGS = -mcpu=cortex-m0plus -mthumb -Wall -Wextra -std=c99 -Os -g
-ASFLAGS = -mcpu=cortex-m0plus -mthumb -g
+CFLAGS = -mcpu=cortex-m4 -mthumb -Wall -Wextra -std=c99 -Os -g
+ASFLAGS = -mcpu=cortex-m4 -mthumb -g
 LDFLAGS = -T linker_script.ld -nostdlib
 EXPLDFLAGS = -T exception_link.ld -nostdlib
 
@@ -171,4 +171,3 @@ check-toolchain:
 	@echo "ARM GCC toolchain found: $$($(CC) --version | head -1)"
 
 .PHONY: all clean run-all run-exceptions doc help check-toolchain test-report test-report-json test-report-html
-.SECONDARY: $(ALL_TEST_OBJECTS) $(ALL_TEST_ELFS) $(ALL_TEST_LISTINGS)
