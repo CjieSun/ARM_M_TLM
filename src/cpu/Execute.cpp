@@ -348,6 +348,18 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << "pop\t" << format_reg_list(fields.reg_list);
             break;
 
+        // T16 System Instructions  
+        case INST_T16_CPS:
+            if (fields.alu_op == 1) {
+                oss << "cpsid\t";
+            } else {
+                oss << "cpsie\t";
+            }
+            if (fields.imm & 0x1) oss << "i";
+            if (fields.imm & 0x2) oss << "f";
+            if (fields.imm & 0x4) oss << "a";
+            break;
+
         // T16 Multiple Load/Store
         case INST_T16_STMIA:
             oss << "stmia\t" << reg_name(fields.rn) << "!, " << format_reg_list(fields.reg_list);
@@ -368,6 +380,93 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << "svc\t#" << fields.imm;
             break;
 
+        // T16 Hints and System
+        case INST_T16_NOP:
+            oss << "nop";
+            break;
+        case INST_T16_WFI:
+            oss << "wfi";
+            break;
+        case INST_T16_WFE:
+            oss << "wfe";
+            break;
+        case INST_T16_SEV:
+            oss << "sev";
+            break;
+        case INST_T16_YIELD:
+            oss << "yield";
+            break;
+        case INST_T16_BKPT:
+            oss << "bkpt\t#0x" << std::hex << std::setfill('0') << std::setw(4) << fields.imm;
+            break;
+    
+        // T32 Branch and Table Branch
+        case INST_T32_B:
+            oss << "b.w\t#" << (int32_t)fields.imm;
+            break;
+        case INST_T32_B_COND:
+            oss << "b" << cond_suffix(fields.cond) << ".w\t#" << (int32_t)fields.imm;
+            break;
+        case INST_T32_BL:
+            oss << "bl\t#" << (int32_t)fields.imm;
+            break;
+
+        case INST_T32_DSB:
+            oss << "dsb";
+            break;
+        case INST_T32_DMB:
+            oss << "dmb";
+            break;
+        case INST_T32_ISB:
+            oss << "isb";
+            break;
+
+#if HAS_SYSTEM_REGISTERS
+        // T32 System Register Access
+        case INST_T32_MRS: {
+            oss << "mrs\t" << reg_name(fields.rd) << ", ";
+            switch (fields.imm) {
+                case 0: oss << "APSR"; break;
+                case 1: oss << "IAPSR"; break;
+                case 2: oss << "EAPSR"; break;
+                case 3: oss << "XPSR"; break;
+                case 5: oss << "IPSR"; break;
+                case 6: oss << "EPSR"; break;
+                case 7: oss << "IEPSR"; break;
+                case 8: oss << "MSP"; break;
+                case 9: oss << "PSP"; break;
+                case 16: oss << "PRIMASK"; break;
+                case 17: oss << "BASEPRI"; break;
+                case 18: oss << "BASEPRI_MAX"; break;
+                case 19: oss << "FAULTMASK"; break;
+                case 20: oss << "CONTROL"; break;
+                default: oss << "SYS_" << fields.imm; break;
+            }
+            break;
+        }
+        case INST_T32_MSR: {
+            oss << "msr\t";
+            switch (fields.imm) {
+                case 0: oss << "APSR"; break;
+                case 1: oss << "IAPSR"; break;
+                case 2: oss << "EAPSR"; break;
+                case 3: oss << "XPSR"; break;
+                case 5: oss << "IPSR"; break;
+                case 6: oss << "EPSR"; break;
+                case 7: oss << "IEPSR"; break;
+                case 8: oss << "MSP"; break;
+                case 9: oss << "PSP"; break;
+                case 16: oss << "PRIMASK"; break;
+                case 17: oss << "BASEPRI"; break;
+                case 18: oss << "BASEPRI_MAX"; break;
+                case 19: oss << "FAULTMASK"; break;
+                case 20: oss << "CONTROL"; break;
+                default: oss << "SYS_" << fields.imm; break;
+            }
+            oss << ", " << reg_name(fields.rn);
+            break;
+        }
+#endif
 #if SUPPORTS_ARMV7_M
         // T16 ARMv7-M Extensions
         case INST_T16_CBZ:
@@ -689,16 +788,7 @@ static std::string format_instruction(const InstructionFields& fields) {
             oss << "revsh\t" << reg_name(fields.rd) << ", " << reg_name(fields.rm);
             break;
 
-        // T32 Branch and Table Branch
-        case INST_T32_B:
-            oss << "b.w\t#" << (int32_t)fields.imm;
-            break;
-        case INST_T32_B_COND:
-            oss << "b" << cond_suffix(fields.cond) << ".w\t#" << (int32_t)fields.imm;
-            break;
-        case INST_T32_BL:
-            oss << "bl\t#" << (int32_t)fields.imm;
-            break;
+
         case INST_T32_TBB:
             oss << "tbb\t[" << reg_name(fields.rn) << ", " << reg_name(fields.rm) << "]";
             break;
@@ -794,47 +884,6 @@ static std::string format_instruction(const InstructionFields& fields) {
         case INST_T32_CLREX:
             oss << "clrex";
             break;
-        case INST_T32_DSB:
-            oss << "dsb";
-            break;
-        case INST_T32_DMB:
-            oss << "dmb";
-            break;
-        case INST_T32_ISB:
-            oss << "isb";
-            break;
-
-        // T16 Hints and System
-        case INST_T16_WFI:
-            oss << "wfi";
-            break;
-        case INST_T16_WFE:
-            oss << "wfe";
-            break;
-        case INST_T16_SEV:
-            oss << "sev";
-            break;
-        case INST_T16_YIELD:
-            oss << "yield";
-            break;
-        case INST_T16_HINT:
-            oss << "nop";  // Most common hint
-            break;
-        case INST_T16_BKPT:
-            oss << "bkpt\t#0x" << std::hex << std::setfill('0') << std::setw(4) << fields.imm;
-            break;
-        
-        // T16 System Instructions  
-        case INST_T16_CPS:
-            if (fields.alu_op == 1) {
-                oss << "cpsid\t";
-            } else {
-                oss << "cpsie\t";
-            }
-            if (fields.imm & 0x1) oss << "i";
-            if (fields.imm & 0x2) oss << "f";
-            if (fields.imm & 0x4) oss << "a";
-            break;
 #endif
 
         // T32 Multiple Load/Store Instructions
@@ -893,53 +942,6 @@ static std::string format_instruction(const InstructionFields& fields) {
             }
 
             oss << "\t" << cond_suffix(firstcond);
-            break;
-        }
-#endif
-
-#if HAS_SYSTEM_REGISTERS
-        // T32 System Register Access
-        case INST_T32_MRS: {
-            oss << "mrs\t" << reg_name(fields.rd) << ", ";
-            switch (fields.imm) {
-                case 0: oss << "APSR"; break;
-                case 1: oss << "IAPSR"; break;
-                case 2: oss << "EAPSR"; break;
-                case 3: oss << "XPSR"; break;
-                case 5: oss << "IPSR"; break;
-                case 6: oss << "EPSR"; break;
-                case 7: oss << "IEPSR"; break;
-                case 8: oss << "MSP"; break;
-                case 9: oss << "PSP"; break;
-                case 16: oss << "PRIMASK"; break;
-                case 17: oss << "BASEPRI"; break;
-                case 18: oss << "BASEPRI_MAX"; break;
-                case 19: oss << "FAULTMASK"; break;
-                case 20: oss << "CONTROL"; break;
-                default: oss << "SYS_" << fields.imm; break;
-            }
-            break;
-        }
-        case INST_T32_MSR: {
-            oss << "msr\t";
-            switch (fields.imm) {
-                case 0: oss << "APSR"; break;
-                case 1: oss << "IAPSR"; break;
-                case 2: oss << "EAPSR"; break;
-                case 3: oss << "XPSR"; break;
-                case 5: oss << "IPSR"; break;
-                case 6: oss << "EPSR"; break;
-                case 7: oss << "IEPSR"; break;
-                case 8: oss << "MSP"; break;
-                case 9: oss << "PSP"; break;
-                case 16: oss << "PRIMASK"; break;
-                case 17: oss << "BASEPRI"; break;
-                case 18: oss << "BASEPRI_MAX"; break;
-                case 19: oss << "FAULTMASK"; break;
-                case 20: oss << "CONTROL"; break;
-                default: oss << "SYS_" << fields.imm; break;
-            }
-            oss << ", " << reg_name(fields.rn);
             break;
         }
 #endif
@@ -1149,7 +1151,6 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         // Status/System (none for v6-M beyond hints)
             pc_changed = execute_status_register(fields);
             break;
-        case INST_T16_HINT:
         case INST_T16_BKPT:
             pc_changed = execute_miscellaneous(fields);
             break;
@@ -1188,6 +1189,7 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
 #endif
 #if HAS_EXTENDED_HINTS
         // ARMv7-M Extended Hints
+        case INST_T16_NOP:
         case INST_T16_WFI:
         case INST_T16_WFE:
         case INST_T16_SEV:
@@ -2283,7 +2285,8 @@ void Execute::write_memory(uint32_t address, uint32_t data, uint32_t size, void*
 bool Execute::execute_extend(const InstructionFields& fields)
 {
     uint32_t result = 0;
-    
+
+#if SUPPORTS_ARMV7_M
     // Check if this is a T32 extend instruction or T16 extend instruction
     if (fields.type == INST_T32_SXTH || fields.type == INST_T32_SXTB || 
         fields.type == INST_T32_UXTH || fields.type == INST_T32_UXTB) {
@@ -2321,7 +2324,9 @@ bool Execute::execute_extend(const InstructionFields& fields)
                 break;
             }
         }
-    } else {
+    } else 
+#endif
+    {
         // T16 extend instructions use fields.rm as source and fields.alu_op to distinguish
         uint32_t rm_val = m_registers->read_register(fields.rm);
         
@@ -2656,6 +2661,12 @@ bool Execute::execute_extended_hint(const InstructionFields& fields)
 {
     // ARMv7-M Extended Hint instructions
     switch (fields.type) {
+        case INST_T16_NOP:
+            LOG_DEBUG("nop - No Operation");
+            // Hint to scheduler that this thread can yield
+            wait(1, SC_NS); // Minimal wait to allow other processes
+            break;
+
         case INST_T16_WFI:
             LOG_DEBUG("WFI - Wait for Interrupt");
             // In real implementation: put core into low-power state until interrupt
@@ -3509,11 +3520,11 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
         }
         
         if (fields.type == INST_T32_STR_REG || fields.type == INST_T32_STRB_REG || fields.type == INST_T32_STRH_REG) {
-            LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [" + reg_name(fields.rn) + 
+            LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [" + reg_name(fields.rn) + 
                      ", " + reg_name(fields.rm) + "] -> stored " + hex32(value) + 
                      " to " + hex32(address));
         } else {
-            LOG_DEBUG(inst_name + " r" + std::to_string(fields.rd) + ", [" + reg_name(fields.rn) + 
+            LOG_DEBUG(inst_name + " " + reg_name(fields.rd) + ", [" + reg_name(fields.rn) + 
                      ", #" + std::to_string((int32_t)fields.imm) + "] -> stored " + hex32(value) + 
                      " to " + hex32(address));
         }
@@ -3536,6 +3547,9 @@ bool Execute::execute_t32_load_store(const InstructionFields& fields, void* data
         LOG_TRACE("[REG] WRITE " + reg_name(fields.rn) + " = " + hex32(new_base) + " (writeback)");
     }
     
+    if (fields.rd == 15) {
+        return true; // Indicate that PC was changed
+    }
     return false; // PC not changed for normal load/store
 }
 

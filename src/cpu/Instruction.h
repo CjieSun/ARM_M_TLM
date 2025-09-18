@@ -53,9 +53,6 @@ enum InstructionType {
     INST_T16_CMP_HI,            // CMP Rd(H), Rm
     INST_T16_MOV_HI,            // MOV Rd(H), Rm
     INST_T16_BX,                // BX Rm
-#if HAS_BLX_REGISTER
-    INST_T16_BLX,               // BLX Rm (not in M0/M0+)
-#endif
 
     // --- T16: PC-relative load --- (Format 6)
     INST_T16_LDR_PC,            // LDR Rd, [PC, #imm]
@@ -114,17 +111,21 @@ enum InstructionType {
     INST_T16_SVC,               // SVC #imm8
     INST_T16_B,                 // B label (unconditional)
     INST_T16_BKPT,              // BKPT #imm8
-    INST_T16_HINT,              // NOP/WFI/WFE/YIELD/SEV
 
-#if SUPPORTS_ARMV7_M
-    // --- T16: ARMv7-M Extended 16-bit Instructions ---
-    INST_T16_CBZ,               // CBZ Rn, label
-    INST_T16_CBNZ,              // CBNZ Rn, label
-    INST_T16_IT,                // IT (If-Then)
+    INST_T16_NOP,               // NOP
     INST_T16_WFI,               // WFI (Wait for Interrupt)
     INST_T16_WFE,               // WFE (Wait for Event)  
     INST_T16_SEV,               // SEV (Send Event)
     INST_T16_YIELD,             // YIELD
+
+#if SUPPORTS_ARMV7_M
+#if HAS_BLX_REGISTER
+    INST_T16_BLX,               // BLX Rm (not in M0/M0+)
+#endif
+    // --- T16: ARMv7-M Extended 16-bit Instructions ---
+    INST_T16_CBZ,               // CBZ Rn, label
+    INST_T16_CBNZ,              // CBNZ Rn, label
+    INST_T16_IT,                // IT (If-Then)
 #endif
 
 #if HAS_T32_BL
@@ -443,7 +444,6 @@ enum InstructionType {
     INST_T32_UXTAB,             // UXTAB Rd, Rn, Rm
 
     // --- T32: Parallel Arithmetic Instructions ---
-    INST_T32_PARALLEL_ARITH,    // Various parallel arithmetic operations
 };
 
 // Instruction fields structure

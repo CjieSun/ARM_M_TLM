@@ -101,6 +101,7 @@ private:
         NVIC_ICER   = 0xE000E180,
         NVIC_ISPR   = 0xE000E200,
         NVIC_ICPR   = 0xE000E280,
+        NVIC_IABR   = 0xE000E300,
         NVIC_IPR0   = 0xE000E400,
         NVIC_IPR7   = 0xE000E41C,
     };

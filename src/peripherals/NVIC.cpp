@@ -59,7 +59,7 @@ void NVIC::handle_read(tlm_generic_payload& trans)
     uint32_t* data_ptr = reinterpret_cast<uint32_t*>(trans.get_data_ptr());
     uint32_t length = trans.get_data_length();
     
-    if (length != 4) {
+    if (length != 1 && length != 2 && length != 4) {
         trans.set_response_status(TLM_BURST_ERROR_RESPONSE);
         return;
     }
@@ -152,7 +152,7 @@ void NVIC::handle_write(tlm_generic_payload& trans)
     uint32_t* data_ptr = reinterpret_cast<uint32_t*>(trans.get_data_ptr());
     uint32_t length = trans.get_data_length();
     
-    if (length != 4) {
+    if (length != 1 && length != 2 && length != 4) {
         trans.set_response_status(TLM_BURST_ERROR_RESPONSE);
         return;
     }

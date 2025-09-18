@@ -64,7 +64,7 @@ void Registers::write_register(uint8_t reg_num, uint32_t value)
     } else if (reg_num == 14) {
         m_lr = value;
     } else if (reg_num == 15) {
-        m_pc = value;
+        m_pc = value & ~1; // Ensure PC is always even (Thumb state)
     } else {
         LOG_WARNING("Invalid register number: " + std::to_string(reg_num));
         return;

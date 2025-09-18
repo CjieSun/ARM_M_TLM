@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(ARM_M_TLM)
 
 # Set C++ standard
+set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -54,7 +55,7 @@ add_executable(arm_m_tlm ${SOURCES})
 target_link_libraries(arm_m_tlm ${SYSTEMC_LIBRARIES})
 
 # Compiler flags
-target_compile_options(arm_m_tlm PRIVATE ${SYSTEMC_CFLAGS_OTHER})
+target_compile_options(arm_m_tlm PRIVATE -g ${SYSTEMC_CFLAGS_OTHER})
 target_compile_definitions(arm_m_tlm PRIVATE SC_INCLUDE_DYNAMIC_PROCESSES)
 
 # Set output directory

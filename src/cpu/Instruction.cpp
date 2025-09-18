@@ -443,15 +443,13 @@ InstructionFields Instruction::decode_thumb16_instruction(uint16_t instruction)
 #if HAS_EXTENDED_HINTS
         // ARMv7-M extended hints
         switch (hint_op) {
+            case 0x00: fields.type = INST_T16_NOP; break;
             case 0x10: fields.type = INST_T16_YIELD; break;
             case 0x20: fields.type = INST_T16_WFE; break;
             case 0x30: fields.type = INST_T16_WFI; break; 
             case 0x40: fields.type = INST_T16_SEV; break;
-            default:   fields.type = INST_T16_HINT; break; // NOP and others
+            default:   fields.type = INST_UNDEFINED; break; // NOP and others
         }
-#else
-        // ARMv6-M basic hints (mainly NOP)
-        fields.type = INST_T16_HINT;
 #endif
         return fields;
     }
@@ -569,6 +567,7 @@ static int32_t decode_t32_branch_immediate(uint32_t instruction, bool is_bl_or_u
     }
 }
 
+#if SUPPORTS_ARMV7_M
 // Helper function for data processing immediate instructions
 static bool decode_t32_data_processing_imm(uint32_t instruction, InstructionFields& fields) {
     if ((instruction & 0xF8000000) != 0xF0000000) return false;
@@ -679,10 +678,8 @@ static bool decode_t32_data_processing_reg(uint32_t instruction, InstructionFiel
     return true;
 }
 
-#if HAS_MEMORY_BARRIERS || HAS_SYSTEM_REGISTERS
 // Helper function for system instructions
 static bool decode_t32_system_instr(uint32_t instruction, InstructionFields& fields) {
-#if HAS_MEMORY_BARRIERS
     // CLREX instruction
     if (instruction == 0xF3BF8F2F) {
         fields.type = INST_T32_CLREX;
@@ -703,9 +700,7 @@ static bool decode_t32_system_instr(uint32_t instruction, InstructionFields& fie
         fields.imm = option;
         return true;
     }
-#endif
     
-#if HAS_SYSTEM_REGISTERS
     // MSR instructions
     if ((instruction & 0xFFE0FF00) == 0xF3808800) {
         fields.type = INST_T32_MSR;
@@ -721,12 +716,9 @@ static bool decode_t32_system_instr(uint32_t instruction, InstructionFields& fie
         fields.imm = instruction & 0xFF;
         return true;
     }
-#endif
     return false;
 }
-#endif
 
-#if HAS_MULTIPLY_INSTRUCTIONS
 // T32 Multiply Instructions Helper Function
 static bool decode_t32_multiply_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, bool is_long = false) {
     if ((instruction & mask) == pattern) {
@@ -767,9 +759,7 @@ static bool decode_t32_multiply_instr(uint32_t instruction, InstructionFields& f
     }
     return false;
 }
-#endif
 
-#if HAS_BIT_MANIPULATION
 // T32 Bit Manipulation Instructions Helper Function
 static bool decode_t32_bit_manip_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type) {
     if ((instruction & mask) == pattern) {
@@ -780,9 +770,7 @@ static bool decode_t32_bit_manip_instr(uint32_t instruction, InstructionFields& 
     }
     return false;
 }
-#endif
 
-#if HAS_BITFIELD_INSTRUCTIONS
 // T32 Bit Field Instructions Helper Function
 static bool decode_t32_bitfield_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, 
                                       InstructionType type, bool has_rn = true, bool is_extract = false) {
@@ -811,7 +799,6 @@ static bool decode_t32_bitfield_instr(uint32_t instruction, InstructionFields& f
     }
     return false;
 }
-#endif
 
 // T32 Sign/Zero Extend Instructions Helper Function
 static bool decode_t32_extend_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type) {
@@ -824,7 +811,6 @@ static bool decode_t32_extend_instr(uint32_t instruction, InstructionFields& fie
     return false;
 }
 
-#if HAS_SATURATING_ARITHMETIC
 // T32 Saturating Arithmetic Instructions Helper Function
 static bool decode_t32_saturating_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type) {
     if ((instruction & mask) == pattern) {
@@ -836,7 +822,6 @@ static bool decode_t32_saturating_instr(uint32_t instruction, InstructionFields&
     }
     return false;
 }
-#endif
 
 // T32 Load/Store Instructions Helper Function
 static bool decode_t32_load_store_immediate(uint32_t instruction, InstructionFields& fields, uint32_t pattern_mask, uint32_t pattern_value, 
@@ -860,7 +845,6 @@ static bool decode_t32_load_store_immediate(uint32_t instruction, InstructionFie
     return false;
 }
 
-#if SUPPORTS_ARMV7_M
 // T32 Multiple Load/Store Instructions Helper Function  
 static bool decode_t32_multiple_load_store(uint32_t instruction, InstructionFields& fields) {
     if ((instruction & 0xFF000000) != 0xE8000000 && (instruction & 0xFF000000) != 0xE9000000) {
@@ -914,7 +898,6 @@ static bool decode_t32_table_branch(uint32_t instruction, InstructionFields& fie
     return false;
 }
 
-#if HAS_EXCLUSIVE_ACCESS
 // T32 Exclusive Access Instructions Helper Function
 static bool decode_t32_exclusive_instr(uint32_t instruction, InstructionFields& fields, uint32_t mask, uint32_t pattern, InstructionType type,
                                        bool has_imm = false, bool has_rd_rt = false) {
@@ -937,7 +920,6 @@ static bool decode_t32_exclusive_instr(uint32_t instruction, InstructionFields& 
     return false;
 }
 #endif
-#endif
 
 InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
 {
@@ -951,6 +933,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
     uint32_t op2 = (instruction >> 20) & 0x7F;   // bits 26:20 (7 bits) - 根据ARM手册表格
     uint32_t op = (instruction >> 15) & 0x1;     // bit 15
 
+#if SUPPORTS_ARMV7_M
     if (op1 == 0x1) {
         // 01 00xx0xx x: Load/store multiple
         if ((op2 & 0x64) == 0x00) {
@@ -1480,7 +1463,11 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             }
         }
     }
-    else if (op1 == 0x2) {
+    
+    else
+#endif
+    if (op1 == 0x2) {
+#if SUPPORTS_ARMV7_M
         // 10 x0xxxxx 0: Data processing (modified immediate)
         if (((op2 & 0x20) == 0x00) && (op == 0)) {
             // 按照ARM手册A5-10表格实现32位修改立即数数据处理指令
@@ -1702,7 +1689,9 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             return fields;
         }
         // 10 xxxxxxx 1: Branches and miscellaneous control
-        else if (op == 1) {
+        else 
+#endif
+        if (op == 1) {
             // 按照ARM手册A5-13表格实现分支和杂项控制指令
             uint32_t op_field = (instruction >> 20) & 0x7F;  // bits 26:20
             uint32_t op1_field = (instruction >> 12) & 0x7;  // bits 14:12
@@ -1710,6 +1699,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             // 按照A5-13表格的op1字段分类
             //0x0
             if ((op1_field & 0x5) == 0x00) {
+#if SUPPORTS_ARMV7_M
                 // 0x0 not 111xxxx: Conditional branch
                 if ((op_field & 0x38) != 0x38) {
                     fields.type = INST_T32_B_COND;
@@ -1719,17 +1709,17 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                     return fields;
                 }
                 // 0x0 011100x: Move to Special Register, MSR
-                else if ((op_field & 0x7E) == 0x38) {
-#if HAS_SYSTEM_REGISTERS
+                else 
+#endif
+                if ((op_field & 0x7E) == 0x38) {
                     fields.type = INST_T32_MSR;
                     fields.rn = (instruction >> 16) & 0xF;
                     fields.imm = instruction & 0xFF;
                     return fields;
-#endif
                 }
+#if SUPPORTS_ARMV7_M
                 // 0x0 0111010: Hint instructions
                 else if (op_field == 0x3A) {
-#if HAS_MEMORY_BARRIERS
                     uint32_t hint_op = (instruction >> 4) & 0xF;  // bits 7:4
                     switch (hint_op) {
                         case 0x4: fields.type = INST_T32_SEV; break;
@@ -1738,17 +1728,17 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                         default:  fields.type = INST_T32_NOP; break;
                     }
                     return fields;
-#endif
                 }
+#endif
                 // 0x0 0111011: Miscellaneous control instructions
                 else if (op_field == 0x3B) {
-#if HAS_MEMORY_BARRIERS
+#if SUPPORTS_ARMV7_M
                     // CLREX instruction check first (specific encoding)
                     if (instruction == 0xF3BF8F2F) {
                         fields.type = INST_T32_CLREX;
                         return fields;
                     }
-                    
+#endif
                     uint32_t misc_op = (instruction >> 4) & 0xF;  // bits 7:4
                     switch (misc_op) {
                         case 0x4: fields.type = INST_T32_DSB; break;
@@ -1758,16 +1748,13 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                     }
                     fields.imm = instruction & 0xF;  // option field
                     return fields;
-#endif
                 }
                 // 0x0 011111x: Move from Special Register, MRS
                 else if ((op_field & 0x7E) == 0x3E) {
-#if HAS_SYSTEM_REGISTERS
                     fields.type = INST_T32_MRS;
                     fields.rd = (instruction >> 8) & 0xF;
                     fields.imm = instruction & 0xFF;
                     return fields;
-#endif
                 }
             }
             // 010 0111111: Permanently UNDEFINED
@@ -1775,6 +1762,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                 fields.type = INST_UNKNOWN;  // UNDEFINED instruction
                 return fields;
             }
+#if SUPPORTS_ARMV7_M
             // 0x1 xxxxxxx: Branch
             else if ((op1_field & 0x5) == 0x1) {
                 fields.type = INST_T32_B;
@@ -1782,6 +1770,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
                 fields.imm = static_cast<uint32_t>(simm);
                 return fields;
             }
+#endif
             // 1x1 xxxxxxx: Branch with Link
             else if ((op1_field & 0x5) == 0x5) {
                 fields.type = INST_T32_BL;
@@ -1792,7 +1781,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             }
         }
     }
-
+#if SUPPORTS_ARMV7_M
     // =====================================================================
     // op1 = 11: Store/Load single data item, data processing (register), multiply, coprocessor
     // =====================================================================
@@ -3054,7 +3043,7 @@ InstructionFields Instruction::decode_thumb32_instruction(uint32_t instruction)
             return fields;
         }
     }
-    
+#endif
     // Default fallback for unrecognized instructions
     fields.type = INST_UNKNOWN;
     return fields;
