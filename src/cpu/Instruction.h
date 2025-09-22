@@ -122,6 +122,7 @@ enum InstructionType {
 #if HAS_BLX_REGISTER
     INST_T16_BLX,               // BLX Rm (not in M0/M0+)
 #endif
+
     // --- T16: ARMv7-M Extended 16-bit Instructions ---
     INST_T16_CBZ,               // CBZ Rn, label
     INST_T16_CBNZ,              // CBNZ Rn, label
@@ -134,7 +135,7 @@ enum InstructionType {
     INST_T32_B_COND,            // B<cond> label (conditional)
     INST_T32_BL,                // BL label
 #endif
-    
+
 #if HAS_MEMORY_BARRIERS
     // --- T32: Memory barriers (ARMv6-M+) ---
     INST_T32_DSB,               // DSB #option
@@ -253,7 +254,6 @@ enum InstructionType {
     INST_T32_LDMDB,             // LDMDB.W Rn!, {reglist}
     INST_T32_STMIA,             // STMIA.W Rn!, {reglist}
     INST_T32_STMDB,             // STMDB.W Rn!, {reglist}
-#endif
 
 #if HAS_EXCLUSIVE_ACCESS
     // --- T32: Exclusive Access Instructions (ARMv7-M+) ---
@@ -278,8 +278,170 @@ enum InstructionType {
     INST_T32_SMULL,             // SMULL RdLo, RdHi, Rn, Rm
     INST_T32_UMLAL,             // UMLAL RdLo, RdHi, Rn, Rm
     INST_T32_SMLAL,             // SMLAL RdLo, RdHi, Rn, Rm
+#endif
 
-     // 16-bit x 16-bit = 32-bit 乘法指令
+#if HAS_BITFIELD_INSTRUCTIONS
+    // --- T32: Bitfield Instructions (ARMv7-M+) ---
+    INST_T32_BFI,               // BFI Rd, Rn, #lsb, #width
+    INST_T32_BFC,               // BFC Rd, #lsb, #width
+    INST_T32_UBFX,              // UBFX Rd, Rn, #lsb, #width
+    INST_T32_SBFX,              // SBFX Rd, Rn, #lsb, #width
+    
+    // --- T32: Sign/Zero Extend Instructions ---
+    INST_T32_SXTH,              // SXTH Rd, Rm
+    INST_T32_SXTB,              // SXTB Rd, Rm  
+    INST_T32_UXTH,              // UXTH Rd, Rm
+    INST_T32_UXTB,              // UXTB Rd, Rm
+#endif
+
+#if HAS_SATURATING_ARITHMETIC
+    // --- T32: Saturating Arithmetic (ARMv7-M+) ---
+    INST_T32_SSAT,              // SSAT Rd, #imm, Rn
+    INST_T32_USAT,              // USAT Rd, #imm, Rn
+#endif
+
+#if HAS_BIT_MANIPULATION
+    // --- T32: Bit Manipulation Instructions (ARMv7-M+) ---
+    INST_T32_CLZ,               // CLZ Rd, Rm (Count Leading Zeros)
+    INST_T32_RBIT,              // RBIT Rd, Rm (Reverse Bits)
+    INST_T32_REV,               // REV Rd, Rm (Byte-Reverse Word)
+    INST_T32_REV16,             // REV16 Rd, Rm (Byte-Reverse Packed Halfword)
+    INST_T32_REVSH,             // REVSH Rd, Rm (Byte-Reverse Signed Halfword)
+#endif
+
+    // --- T32: Coprocessor Instructions ---
+    INST_T32_STC,               // STC coproc, CRd, [Rn]
+    INST_T32_LDC,               // LDC coproc, CRd, [Rn]
+    INST_T32_LDC_LIT,           // LDC coproc, CRd, label
+    INST_T32_MCRR,              // MCRR coproc, opc1, Rt, Rt2, CRm
+    INST_T32_MRRC,              // MRRC coproc, opc1, Rt, Rt2, CRm
+    INST_T32_CDP,               // CDP coproc, opc1, CRd, CRn, CRm, opc2
+    INST_T32_MCR,               // MCR coproc, opc1, Rt, CRn, CRm, opc2
+    INST_T32_MRC,               // MRC coproc, opc1, Rt, CRn, CRm, opc2
+    INST_T32_SYSTEM_CP,         // System coprocessor instruction
+
+    // --- T32: Literal Load Instructions ---
+    INST_T32_LDRD_LIT,          // LDRD Rt, Rt2, label
+    INST_T32_LDRB_LIT,          // LDRB Rt, label
+    INST_T32_LDRSB_LIT,         // LDRSB Rt, label
+    INST_T32_LDRH_LIT,          // LDRH Rt, label
+    INST_T32_LDRSH_LIT,         // LDRSH Rt, label
+    INST_T32_LDR_LIT,           // LDR Rt, label
+    INST_T32_PLD_LIT,           // PLD label
+    INST_T32_PLI_LIT,           // PLI label
+
+    // --- T32: Hint Instructions ---
+    INST_T32_NOP,               // NOP.W
+    INST_T32_SEV,               // SEV.W (Send Event)
+    INST_T32_SEVL,              // SEVL.W (Send Event Local) 
+    INST_T32_WFE,               // WFE.W (Wait for Event)
+    INST_T32_WFI,               // WFI.W (Wait for Interrupt)
+    INST_T32_YIELD,             // YIELD.W
+
+    // --- T32: Store Instructions (Register) ---
+    INST_T32_STRB_REG,          // STRB.W Rt, [Rn, Rm]
+    INST_T32_STRH_REG,          // STRH.W Rt, [Rn, Rm]
+    INST_T32_STR_REG,           // STR.W Rt, [Rn, Rm]
+
+    // --- T32: Load Instructions (Register) ---
+    INST_T32_LDRB_REG,          // LDRB.W Rt, [Rn, Rm]
+    INST_T32_LDRH_REG,          // LDRH.W Rt, [Rn, Rm]
+    INST_T32_LDR_REG,           // LDR.W Rt, [Rn, Rm]
+    INST_T32_LDRSB_REG,         // LDRSB.W Rt, [Rn, Rm]
+    INST_T32_LDRSH_REG,         // LDRSH.W Rt, [Rn, Rm]
+
+    // --- T32: Memory Hint Instructions ---
+    INST_T32_PLD_IMM,           // PLD [Rn, #imm]
+    INST_T32_PLD_REG,           // PLD [Rn, Rm]
+    INST_T32_PLI_IMM,           // PLI [Rn, #imm]
+    INST_T32_PLI_REG,           // PLI [Rn, Rm]
+
+    // --- T32: Shift Instructions (Immediate) ---
+
+    // --- T32: Unprivileged Load/Store Instructions ---
+    INST_T32_LDRSHT,            // LDRSHT Rt, [Rn, #imm]
+    INST_T32_LDRT,              // LDRT Rt, [Rn, #imm]
+
+    // --- T32: Parallel Arithmetic Instructions ---
+#endif
+
+#if SUPPORTS_ARMV7E_M 
+    INST_T32_SSAT16,            // SSAT16 Rd, #imm, Rn
+    INST_T32_USAT16,            // USAT16 Rd, #imm, Rn
+
+    // --- T32: Pack Instructions ---
+    INST_T32_PKHBT,             // PKHBT Rd, Rn, Rm
+    INST_T32_PKHTB,             // PKHTB Rd, Rn, Rm
+
+    // --- T32: Sign/Zero Extend with Add Instructions ---
+    INST_T32_SXTAH,             // SXTAH Rd, Rn, Rm
+    INST_T32_UXTAH,             // UXTAH Rd, Rn, Rm
+    INST_T32_SXTAB16,           // SXTAB16 Rd, Rn, Rm
+    INST_T32_SXTB16,            // SXTB16 Rd, Rm
+    INST_T32_UXTAB16,           // UXTAB16 Rd, Rn, Rm
+    INST_T32_UXTB16,            // UXTB16 Rd, Rm
+    INST_T32_SXTAB,             // SXTAB Rd, Rn, Rm
+    INST_T32_UXTAB,             // UXTAB Rd, Rn, Rm
+
+#if HAS_DSP_EXTENSIONS
+    // --- T32: DSP Extensions (ARMv7E-M) ---
+    INST_T32_QADD,              // QADD Rd, Rn, Rm
+    INST_T32_QSUB,              // QSUB Rd, Rn, Rm
+    INST_T32_QDADD,             // QDADD Rd, Rn, Rm
+    INST_T32_QDSUB,             // QDSUB Rd, Rn, Rm
+
+    // --- T32: Parallel Add/Subtract (non-saturating signed) ---
+    INST_T32_SADD16,            // SADD16 Rd, Rn, Rm
+    INST_T32_SSUB16,            // SSUB16 Rd, Rn, Rm
+    INST_T32_SASX,              // SASX Rd, Rn, Rm
+    INST_T32_SSAX,              // SSAX Rd, Rn, Rm
+    INST_T32_SADD8,             // SADD8 Rd, Rn, Rm
+    INST_T32_SSUB8,             // SSUB8 Rd, Rn, Rm
+
+    // --- T32: Parallel Add/Subtract (saturating) ---
+    INST_T32_QADD16,            // QADD16 Rd, Rn, Rm
+    INST_T32_QSUB16,            // QSUB16 Rd, Rn, Rm
+    INST_T32_QASX,              // QASX Rd, Rn, Rm
+    INST_T32_QSAX,              // QSAX Rd, Rn, Rm
+    INST_T32_QADD8,             // QADD8 Rd, Rn, Rm
+    INST_T32_QSUB8,             // QSUB8 Rd, Rn, Rm
+
+    // --- T32: Parallel Add/Subtract (Halving signed) ---
+    INST_T32_SHADD16,            // SHADD16 Rd, Rn, Rm
+    INST_T32_SHSUB16,            // SHSUB16 Rd, Rn, Rm
+    INST_T32_SHASX,              // SHASX Rd, Rn, Rm
+    INST_T32_SHSAX,              // SHSAX Rd, Rn, Rm
+    INST_T32_SHADD8,             // SHADD8 Rd, Rn, Rm
+    INST_T32_SHSUB8,             // SHSUB8 Rd, Rn, Rm
+
+    // --- T32: Parallel Add/Subtract (non-saturating unsigned) ---
+    INST_T32_UADD16,            // UADD16 Rd, Rn, Rm
+    INST_T32_USUB16,            // USUB16 Rd, Rn, Rm
+    INST_T32_UASX,              // UASX Rd, Rn, Rm
+    INST_T32_USAX,              // USAX Rd, Rn, Rm
+    INST_T32_UADD8,             // UADD8 Rd, Rn, Rm
+    INST_T32_USUB8,             // USUB8 Rd, Rn, Rm
+
+    // --- T32: Parallel Add/Subtract (non-saturating unsigned) ---
+    INST_T32_UQADD16,            // UQADD16 Rd, Rn, Rm
+    INST_T32_UQSUB16,            // UQSUB16 Rd, Rn, Rm
+    INST_T32_UQASX,              // UQASX Rd, Rn, Rm
+    INST_T32_UQSAX,              // UQSAX Rd, Rn, Rm
+    INST_T32_UQADD8,             // UQADD8 Rd, Rn, Rm
+    INST_T32_UQSUB8,             // UQSUB8 Rd, Rn, Rm
+
+    // --- T32: Parallel Add/Subtract (Halving unsigned) ---
+    INST_T32_UHADD16,            // UHADD16 Rd, Rn, Rm
+    INST_T32_UHSUB16,            // UHSUB16 Rd, Rn, Rm
+    INST_T32_UHASX,              // UHASX Rd, Rn, Rm
+    INST_T32_UHSAX,              // UHSAX Rd, Rn, Rm
+    INST_T32_UHADD8,             // UHADD8 Rd, Rn, Rm
+    INST_T32_UHSUB8,             // UHSUB8 Rd, Rn, Rm
+
+    INST_T32_SEL,               // SEL Rd, Rn, Rm (Select Bytes)
+#endif
+
+  // 16-bit x 16-bit = 32-bit 乘法指令
     INST_T32_SMLABB,           // Signed Multiply Accumulate (Bottom x Bottom)
     INST_T32_SMLABT,           // Signed Multiply Accumulate (Bottom x Top)  
     INST_T32_SMLATB,           // Signed Multiply Accumulate (Top x Bottom)
@@ -331,43 +493,7 @@ enum InstructionType {
     
     // 无符号乘法累加累加长指令
     INST_T32_UMAAL,            // Unsigned Multiply Accumulate Accumulate Long
-#endif
 
-#if HAS_BITFIELD_INSTRUCTIONS
-    // --- T32: Bitfield Instructions (ARMv7-M+) ---
-    INST_T32_BFI,               // BFI Rd, Rn, #lsb, #width
-    INST_T32_BFC,               // BFC Rd, #lsb, #width
-    INST_T32_UBFX,              // UBFX Rd, Rn, #lsb, #width
-    INST_T32_SBFX,              // SBFX Rd, Rn, #lsb, #width
-    
-    // --- T32: Sign/Zero Extend Instructions ---
-    INST_T32_SXTH,              // SXTH Rd, Rm
-    INST_T32_SXTB,              // SXTB Rd, Rm  
-    INST_T32_UXTH,              // UXTH Rd, Rm
-    INST_T32_UXTB,              // UXTB Rd, Rm
-#endif
-
-#if HAS_SATURATING_ARITHMETIC
-    // --- T32: Saturating Arithmetic (ARMv7-M+) ---
-    INST_T32_SSAT,              // SSAT Rd, #imm, Rn
-    INST_T32_SSAT16,            // SSAT16 Rd, #imm, Rn
-    INST_T32_USAT,              // USAT Rd, #imm, Rn
-    INST_T32_USAT16,            // USAT16 Rd, #imm, Rn
-#endif
-
-#if HAS_BIT_MANIPULATION
-    // --- T32: Bit Manipulation Instructions (ARMv7-M+) ---
-    INST_T32_CLZ,               // CLZ Rd, Rm (Count Leading Zeros)
-    INST_T32_RBIT,              // RBIT Rd, Rm (Reverse Bits)
-    INST_T32_REV,               // REV Rd, Rm (Byte-Reverse Word)
-    INST_T32_REV16,             // REV16 Rd, Rm (Byte-Reverse Packed Halfword)
-    INST_T32_REVSH,             // REVSH Rd, Rm (Byte-Reverse Signed Halfword)
-#endif
-
-#if SUPPORTS_ARMV7E_M && HAS_DSP_EXTENSIONS
-    // --- T32: DSP Extensions (ARMv7E-M) ---
-    INST_T32_QADD,              // QADD Rd, Rn, Rm
-    INST_T32_QSUB,              // QSUB Rd, Rn, Rm
 #endif
 
 #if SUPPORTS_ARMV8_M && HAS_SECURITY_EXTENSIONS
@@ -377,73 +503,6 @@ enum InstructionType {
     INST_T32_BXNS,              // BXNS (Branch, Non-Secure)
 #endif
 
-    // --- T32: Coprocessor Instructions ---
-    INST_T32_STC,               // STC coproc, CRd, [Rn]
-    INST_T32_LDC,               // LDC coproc, CRd, [Rn]
-    INST_T32_LDC_LIT,           // LDC coproc, CRd, label
-    INST_T32_MCRR,              // MCRR coproc, opc1, Rt, Rt2, CRm
-    INST_T32_MRRC,              // MRRC coproc, opc1, Rt, Rt2, CRm
-    INST_T32_CDP,               // CDP coproc, opc1, CRd, CRn, CRm, opc2
-    INST_T32_MCR,               // MCR coproc, opc1, Rt, CRn, CRm, opc2
-    INST_T32_MRC,               // MRC coproc, opc1, Rt, CRn, CRm, opc2
-    INST_T32_SYSTEM_CP,         // System coprocessor instruction
-
-    // --- T32: Literal Load Instructions ---
-    INST_T32_LDRD_LIT,          // LDRD Rt, Rt2, label
-    INST_T32_LDRB_LIT,          // LDRB Rt, label
-    INST_T32_LDRSB_LIT,         // LDRSB Rt, label
-    INST_T32_LDRH_LIT,          // LDRH Rt, label
-    INST_T32_LDRSH_LIT,         // LDRSH Rt, label
-    INST_T32_LDR_LIT,           // LDR Rt, label
-    INST_T32_PLD_LIT,           // PLD label
-    INST_T32_PLI_LIT,           // PLI label
-
-    // --- T32: Hint Instructions ---
-    INST_T32_NOP,               // NOP.W
-    INST_T32_SEV,               // SEV.W (Send Event)
-    INST_T32_SEVL,              // SEVL.W (Send Event Local) 
-    INST_T32_WFE,               // WFE.W (Wait for Event)
-    INST_T32_WFI,               // WFI.W (Wait for Interrupt)
-    INST_T32_YIELD,             // YIELD.W
-
-    // --- T32: Store Instructions (Register) ---
-    INST_T32_STRB_REG,          // STRB.W Rt, [Rn, Rm]
-    INST_T32_STRH_REG,          // STRH.W Rt, [Rn, Rm]
-    INST_T32_STR_REG,           // STR.W Rt, [Rn, Rm]
-
-    // --- T32: Load Instructions (Register) ---
-    INST_T32_LDRB_REG,          // LDRB.W Rt, [Rn, Rm]
-    INST_T32_LDRH_REG,          // LDRH.W Rt, [Rn, Rm]
-    INST_T32_LDR_REG,           // LDR.W Rt, [Rn, Rm]
-    INST_T32_LDRSB_REG,         // LDRSB.W Rt, [Rn, Rm]
-    INST_T32_LDRSH_REG,         // LDRSH.W Rt, [Rn, Rm]
-
-    // --- T32: Memory Hint Instructions ---
-    INST_T32_PLD_IMM,           // PLD [Rn, #imm]
-    INST_T32_PLD_REG,           // PLD [Rn, Rm]
-    INST_T32_PLI_IMM,           // PLI [Rn, #imm]
-    INST_T32_PLI_REG,           // PLI [Rn, Rm]
-
-    // --- T32: Shift Instructions (Immediate) ---
-    // --- T32: Pack Instructions ---
-    INST_T32_PKHBT,             // PKHBT Rd, Rn, Rm
-    INST_T32_PKHTB,             // PKHTB Rd, Rn, Rm
-
-    // --- T32: Unprivileged Load/Store Instructions ---
-    INST_T32_LDRSHT,            // LDRSHT Rt, [Rn, #imm]
-    INST_T32_LDRT,              // LDRT Rt, [Rn, #imm]
-
-    // --- T32: Sign/Zero Extend with Add Instructions ---
-    INST_T32_SXTAH,             // SXTAH Rd, Rn, Rm
-    INST_T32_UXTAH,             // UXTAH Rd, Rn, Rm
-    INST_T32_SXTAB16,           // SXTAB16 Rd, Rn, Rm
-    INST_T32_SXTB16,            // SXTB16 Rd, Rm
-    INST_T32_UXTAB16,           // UXTAB16 Rd, Rn, Rm
-    INST_T32_UXTB16,            // UXTB16 Rd, Rm
-    INST_T32_SXTAB,             // SXTAB Rd, Rn, Rm
-    INST_T32_UXTAB,             // UXTAB Rd, Rn, Rm
-
-    // --- T32: Parallel Arithmetic Instructions ---
 };
 
 // Instruction fields structure

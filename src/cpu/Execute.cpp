@@ -7,6 +7,148 @@
 #include <iomanip>
 #include <cstring>
 
+#if HAS_DSP_EXTENSIONS
+// Helper for parallel add/sub lane operations (16-bit x2 or 8-bit x4)
+static uint32_t saturate_signed(int32_t value, int bits, bool &sat) {
+    int32_t maxv = (1 << (bits - 1)) - 1;
+    int32_t minv = - (1 << (bits - 1));
+    if (value > maxv) { sat = true; return (uint32_t)maxv & ((1u<<bits)-1); }
+    if (value < minv) { sat = true; return (uint32_t)minv & ((1u<<bits)-1); }
+    return (uint32_t)(value & ((1u<<bits)-1));
+}
+static uint32_t saturate_unsigned(int32_t value, int bits, bool &sat) {
+    int32_t maxv = (1<<bits)-1;
+    if (value < 0) { sat = true; return 0; }
+    if (value > maxv) { sat = true; return (uint32_t)maxv; }
+    return (uint32_t)value;
+}
+
+static uint32_t execute_parallel_addsub(Registers* regs, const InstructionFields &f) {
+    uint32_t rn = regs->read_register(f.rn);
+    uint32_t rm = regs->read_register(f.rm);
+    bool is16 = false, is8 = false;
+    bool signed_lane = false, saturating = false, halving = false, unsigned_saturating = false, unsigned_halving = false;
+    enum Pattern { ADD16, SUB16, ASX, SAX, ADD8, SUB8 } pattern;
+
+    switch (f.type) {
+        case INST_T32_SADD16: signed_lane=true; is16=true; pattern=ADD16; break;
+        case INST_T32_SSUB16: signed_lane=true; is16=true; pattern=SUB16; break;
+        case INST_T32_SASX:   signed_lane=true; is16=true; pattern=ASX; break;
+        case INST_T32_SSAX:   signed_lane=true; is16=true; pattern=SAX; break;
+        case INST_T32_SADD8:  signed_lane=true; is8=true;  pattern=ADD8; break;
+        case INST_T32_SSUB8:  signed_lane=true; is8=true;  pattern=SUB8; break;
+        case INST_T32_QADD16: signed_lane=true; is16=true; pattern=ADD16; saturating=true; break;
+        case INST_T32_QSUB16: signed_lane=true; is16=true; pattern=SUB16; saturating=true; break;
+        case INST_T32_QASX:   signed_lane=true; is16=true; pattern=ASX; saturating=true; break;
+        case INST_T32_QSAX:   signed_lane=true; is16=true; pattern=SAX; saturating=true; break;
+        case INST_T32_QADD8:  signed_lane=true; is8=true;  pattern=ADD8; saturating=true; break;
+        case INST_T32_QSUB8:  signed_lane=true; is8=true;  pattern=SUB8; saturating=true; break;
+        case INST_T32_UADD16: is16=true; pattern=ADD16; break;
+        case INST_T32_USUB16: is16=true; pattern=SUB16; break;
+        case INST_T32_UASX:   is16=true; pattern=ASX; break;
+        case INST_T32_USAX:   is16=true; pattern=SAX; break;
+        case INST_T32_UADD8:  is8=true;  pattern=ADD8; break;
+        case INST_T32_USUB8:  is8=true;  pattern=SUB8; break;
+        case INST_T32_UQADD16: is16=true; pattern=ADD16; unsigned_saturating=true; break;
+        case INST_T32_UQSUB16: is16=true; pattern=SUB16; unsigned_saturating=true; break;
+        case INST_T32_UQASX:   is16=true; pattern=ASX; unsigned_saturating=true; break;
+        case INST_T32_UQSAX:   is16=true; pattern=SAX; unsigned_saturating=true; break;
+        case INST_T32_UQADD8:  is8=true;  pattern=ADD8; unsigned_saturating=true; break;
+        case INST_T32_UQSUB8:  is8=true;  pattern=SUB8; unsigned_saturating=true; break;
+        case INST_T32_SHADD16: signed_lane=true; is16=true; pattern=ADD16; halving=true; break;
+        case INST_T32_SHSUB16: signed_lane=true; is16=true; pattern=SUB16; halving=true; break;
+        case INST_T32_SHASX:   signed_lane=true; is16=true; pattern=ASX; halving=true; break;
+        case INST_T32_SHSAX:   signed_lane=true; is16=true; pattern=SAX; halving=true; break;
+        case INST_T32_SHADD8:  signed_lane=true; is8=true;  pattern=ADD8; halving=true; break;
+        case INST_T32_SHSUB8:  signed_lane=true; is8=true;  pattern=SUB8; halving=true; break;
+        case INST_T32_UHADD16: is16=true; pattern=ADD16; unsigned_halving=true; break;
+        case INST_T32_UHSUB16: is16=true; pattern=SUB16; unsigned_halving=true; break;
+        case INST_T32_UHASX:   is16=true; pattern=ASX; unsigned_halving=true; break;
+        case INST_T32_UHSAX:   is16=true; pattern=SAX; unsigned_halving=true; break;
+        case INST_T32_UHADD8:  is8=true;  pattern=ADD8; unsigned_halving=true; break;
+        case INST_T32_UHSUB8:  is8=true;  pattern=SUB8; unsigned_halving=true; break;
+        default: return 0; // not a parallel op
+    }
+
+    bool qsat = false; // any lane saturated sets Q flag
+    uint32_t result = 0;
+    if (is16) {
+        int16_t rn_lo = rn & 0xFFFF; int16_t rn_hi = (rn >> 16) & 0xFFFF;
+        int16_t rm_lo = rm & 0xFFFF; int16_t rm_hi = (rm >> 16) & 0xFFFF;
+        auto u_rn_lo = (uint16_t)rn_lo; auto u_rn_hi=(uint16_t)rn_hi;
+        auto u_rm_lo = (uint16_t)rm_lo; auto u_rm_hi=(uint16_t)rm_hi;
+        uint16_t lanes[2];
+        for (int lane=0; lane<2; ++lane) {
+            int32_t a_s = lane==0? rn_lo: rn_hi;
+            int32_t b_s = lane==0? rm_lo: rm_hi;
+            uint32_t a_u = lane==0? u_rn_lo: u_rn_hi;
+            uint32_t b_u = lane==0? u_rm_lo: u_rm_hi;
+            int32_t val=0; uint32_t uval=0; bool sat=false;
+            switch(pattern) {
+                case ADD16: val = signed_lane? (a_s + b_s) : (int32_t)(a_u + b_u); uval = a_u + b_u; break;
+                case SUB16: val = signed_lane? (a_s - b_s) : (int32_t)(a_u - b_u); uval = (a_u - b_u) & 0xFFFF; break;
+                case ASX: // lower: a_s + b_s, upper: a_s - b_s with swap per spec; implement lane logic
+                    if (lane==0) { val = signed_lane? (a_s + b_s) : (int32_t)(a_u + b_u); uval = a_u + b_u; }
+                    else { val = signed_lane? (a_s - b_s) : (int32_t)(a_u - b_u); uval = (a_u - b_u) & 0xFFFF; }
+                    break;
+                case SAX:
+                    if (lane==0) { val = signed_lane? (a_s - b_s) : (int32_t)(a_u - b_u); uval = (a_u - b_u) & 0xFFFF; }
+                    else { val = signed_lane? (a_s + b_s) : (int32_t)(a_u + b_u); uval = a_u + b_u; }
+                    break;
+                case ADD8: case SUB8: break; // not used in 16-bit path
+            }
+            uint32_t outlane;
+            if (saturating) {
+                outlane = saturate_signed(val,16,sat);
+            } else if (unsigned_saturating) {
+                outlane = saturate_unsigned((int32_t)(uval),16,sat);
+            } else if (halving) {
+                outlane = (uint32_t)((val >> 1) & 0xFFFF);
+            } else if (unsigned_halving) {
+                outlane = (uval >> 1) & 0xFFFF;
+            } else {
+                outlane = signed_lane? (uint32_t)(val & 0xFFFF) : (uval & 0xFFFF);
+            }
+            if (sat) qsat = true;
+            lanes[lane] = (uint16_t)outlane;
+        }
+        result = (uint32_t(lanes[1]) << 16) | lanes[0];
+    } else if (is8) {
+        uint8_t rn_b[4]; uint8_t rm_b[4];
+        for (int i=0;i<4;++i) { rn_b[i]=(rn>>(i*8))&0xFF; rm_b[i]=(rm>>(i*8))&0xFF; }
+        uint8_t outb[4];
+        for (int i=0;i<4;++i) {
+            int32_t a_s = (int8_t)rn_b[i]; int32_t b_s = (int8_t)rm_b[i];
+            uint32_t a_u = rn_b[i]; uint32_t b_u = rm_b[i];
+            int32_t val=0; uint32_t uval=0; bool sat=false;
+            switch(pattern) {
+                case ADD8: val = signed_lane? (a_s + b_s) : (int32_t)(a_u + b_u); uval = a_u + b_u; break;
+                case SUB8: val = signed_lane? (a_s - b_s) : (int32_t)(a_u - b_u); uval = (a_u - b_u) & 0xFF; break;
+                default: break; // other patterns not for 8-bit in this reduced mapping
+            }
+            uint32_t outlane;
+            if (saturating) {
+                outlane = saturate_signed(val,8,sat);
+            } else if (unsigned_saturating) {
+                outlane = saturate_unsigned((int32_t)uval,8,sat);
+            } else if (halving) {
+                outlane = (uint32_t)((val >> 1) & 0xFF);
+            } else if (unsigned_halving) {
+                outlane = (uval >> 1) & 0xFF;
+            } else {
+                outlane = signed_lane? (uint32_t)(val & 0xFF) : (uval & 0xFF);
+            }
+            if (sat) qsat = true;
+            outb[i] = (uint8_t)outlane;
+        }
+        result = (uint32_t(outb[3])<<24)|(uint32_t(outb[2])<<16)|(uint32_t(outb[1])<<8)|outb[0];
+    }
+    if (qsat) regs->set_q_flag(true);
+    regs->write_register(f.rd, result);
+    return result;
+}
+#endif // HAS_DSP_EXTENSIONS
+
 // CPU is included above for request_svc; we keep using its initiator socket type too
 
 namespace {
@@ -1266,6 +1408,18 @@ bool Execute::execute_instruction(const InstructionFields& fields, void* data_bu
         case INST_T32_TEQ_REG:
         case INST_T32_CMP_REG:
         case INST_T32_CMN_REG:
+#if HAS_DSP_EXTENSIONS
+        case INST_T32_SADD16: case INST_T32_SSUB16: case INST_T32_SASX: case INST_T32_SSAX:
+        case INST_T32_SADD8: case INST_T32_SSUB8:
+        case INST_T32_QADD16: case INST_T32_QSUB16: case INST_T32_QASX: case INST_T32_QSAX: case INST_T32_QADD8: case INST_T32_QSUB8:
+        case INST_T32_UADD16: case INST_T32_USUB16: case INST_T32_UASX: case INST_T32_USAX: case INST_T32_UADD8: case INST_T32_USUB8:
+        case INST_T32_UQADD16: case INST_T32_UQSUB16: case INST_T32_UQASX: case INST_T32_UQSAX: case INST_T32_UQADD8: case INST_T32_UQSUB8:
+        case INST_T32_SHADD16: case INST_T32_SHSUB16: case INST_T32_SHASX: case INST_T32_SHSAX: case INST_T32_SHADD8: case INST_T32_SHSUB8:
+        case INST_T32_UHADD16: case INST_T32_UHSUB16: case INST_T32_UHASX: case INST_T32_UHSAX: case INST_T32_UHADD8: case INST_T32_UHSUB8:
+            execute_parallel_addsub(m_registers, fields);
+            pc_changed = false; // does not modify pc
+            break;
+#endif
             pc_changed = execute_t32_data_processing(fields);
             break;
         // T32 Shift Instructions (register)
