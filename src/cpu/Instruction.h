@@ -361,11 +361,11 @@ enum InstructionType {
     // --- T32: Unprivileged Load/Store Instructions ---
     INST_T32_LDRSHT,            // LDRSHT Rt, [Rn, #imm]
     INST_T32_LDRT,              // LDRT Rt, [Rn, #imm]
-
-    // --- T32: Parallel Arithmetic Instructions ---
 #endif
 
-#if SUPPORTS_ARMV7E_M 
+#if SUPPORTS_ARMV7E_M
+    // --- T32: Parallel Arithmetic Instructions ---
+
     INST_T32_SSAT16,            // SSAT16 Rd, #imm, Rn
     INST_T32_USAT16,            // USAT16 Rd, #imm, Rn
 

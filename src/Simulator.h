@@ -20,10 +20,10 @@ public:
     // Constructor
     SC_HAS_PROCESS(Simulator);
     Simulator(sc_module_name name, const std::string& hex_file = "");
-    
+
     // Destructor
     ~Simulator();
-    
+
     // Configuration
     void set_hex_file(const std::string& hex_file) { m_hex_file = hex_file; }
     void set_log_level(LogLevel level) { Log::getInstance().set_log_level(level); }
@@ -31,7 +31,7 @@ public:
     void enable_performance_monitoring(bool enable) { m_performance_enabled = enable; }
     void enable_gdb_server(int port = 3333);
     void disable_gdb_server();
-    
+
     // Simulation control
     void run_simulation(sc_time duration = SC_ZERO_TIME);
     void stop_simulation();
@@ -50,8 +50,9 @@ private:
     bool m_performance_enabled;
     bool m_gdb_enabled;
     
-    // Initialization
+    // Initialization and helper methods
     void initialize_components();
+    void setup_memory_map();
     void connect_components();
     bool load_program();
     

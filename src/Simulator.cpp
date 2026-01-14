@@ -50,19 +50,46 @@ void Simulator::connect_components()
 {
     LOG_INFO("Connecting components...");
     
+    // Setup the memory map first
+    setup_memory_map();
+    
     // Connect CPU to bus controller
     m_cpu->inst_bus.bind(m_bus_ctrl->inst_socket);
     m_cpu->data_bus.bind(m_bus_ctrl->data_socket);
     
-    // Connect bus controller to peripherals
-    m_bus_ctrl->memory_socket.bind(m_memory->socket);
-    m_bus_ctrl->trace_socket.bind(m_trace->socket);
-    m_bus_ctrl->nvic_socket.bind(m_nvic->socket);
+    // Connect devices using the new get_device_socket method
+    auto* memory_socket = m_bus_ctrl->get_device_socket("memory");
+    if (memory_socket) {
+        memory_socket->bind(m_memory->socket);
+    }
+    
+    auto* trace_socket = m_bus_ctrl->get_device_socket("trace");
+    if (trace_socket) {
+        trace_socket->bind(m_trace->socket);
+    }
+    
+    auto* nvic_socket = m_bus_ctrl->get_device_socket("nvic");
+    if (nvic_socket) {
+        nvic_socket->bind(m_nvic->socket);
+    }
     
     // Connect NVIC to CPU for exception delivery
     m_nvic->cpu_socket.bind(m_cpu->irq_line);
 
     LOG_INFO("All components connected successfully");
+}
+
+void Simulator::setup_memory_map()
+{
+    LOG_INFO("Setting up memory map...");
+    
+    // Add standard devices
+    m_bus_ctrl->add_memory(0x00000000, 0x40000000);     // Main memory space
+    m_bus_ctrl->add_trace_peripheral(0x40000000, 0x4000);  // Trace peripheral  
+    m_bus_ctrl->add_nvic(0xE000E000, 0x1000);              // ARM NVIC
+    
+    // Print the memory map
+    m_bus_ctrl->print_memory_map();
 }
 
 bool Simulator::load_program()

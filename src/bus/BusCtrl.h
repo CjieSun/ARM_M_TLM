@@ -5,6 +5,10 @@
 #include <tlm>
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm_utils/simple_initiator_socket.h>
+#include <map>
+#include <vector>
+#include <memory>
+#include <string>
 
 using namespace sc_core;
 using namespace tlm;
@@ -16,14 +20,36 @@ public:
     tlm_utils::simple_target_socket<BusCtrl> inst_socket; // Instruction bus
     tlm_utils::simple_target_socket<BusCtrl> data_socket; // Data bus
     
-    // Initiator sockets (to peripherals)
-    tlm_utils::simple_initiator_socket<BusCtrl> memory_socket; // Memory
-    tlm_utils::simple_initiator_socket<BusCtrl> trace_socket;  // Trace peripheral
-    tlm_utils::simple_initiator_socket<BusCtrl> nvic_socket;   // NVIC peripheral
+    // Device mapping structure
+    struct DeviceMapping {
+        std::string name;
+        uint32_t base_address;
+        uint32_t size;
+        tlm_utils::simple_initiator_socket<BusCtrl>* socket;
+        bool address_translation;  // true if address should be adjusted to 0-based
+        
+        DeviceMapping(const std::string& n, uint32_t base, uint32_t sz, bool addr_trans = true) 
+            : name(n), base_address(base), size(sz), socket(nullptr), address_translation(addr_trans) {}
+    };
 
     // Constructor
     SC_HAS_PROCESS(BusCtrl);
     BusCtrl(sc_module_name name);
+    
+    // Device management methods
+    void add_device(const std::string& name, uint32_t base_address, uint32_t size, bool address_translation = true);
+    tlm_utils::simple_initiator_socket<BusCtrl>* get_device_socket(const std::string& name);
+    void print_memory_map() const;
+    
+    // Pre-defined device helpers
+    void add_memory(uint32_t base = 0x00000000, uint32_t size = 0x40000000);
+    void add_trace_peripheral(uint32_t base = 0x40000000, uint32_t size = 0x00004000);
+    void add_nvic(uint32_t base = 0xE000E000, uint32_t size = 0x00001000);
+    void add_uart(const std::string& name, uint32_t base, uint32_t size = 0x1000);
+    void add_gpio(const std::string& name, uint32_t base, uint32_t size = 0x1000);
+    void add_timer(const std::string& name, uint32_t base, uint32_t size = 0x1000);
+    void add_spi(const std::string& name, uint32_t base, uint32_t size = 0x1000);
+    void add_i2c(const std::string& name, uint32_t base, uint32_t size = 0x1000);
 
     // TLM-2 interface methods
     virtual void b_transport(tlm_generic_payload& trans, sc_time& delay);
@@ -32,24 +58,14 @@ public:
     virtual unsigned int transport_dbg(tlm_generic_payload& trans);
 
 private:
+    // Device storage
+    std::vector<std::unique_ptr<DeviceMapping>> m_devices;
+    std::map<std::string, size_t> m_device_index;  // name -> index in m_devices
+    std::vector<std::unique_ptr<tlm_utils::simple_initiator_socket<BusCtrl>>> m_sockets;
+    
     // Address decoding
-    enum AddressSpace {
-        ADDR_MEMORY,    // 0x00000000 - 0x3FFFFFFF
-        ADDR_TRACE,     // 0x40000000 - 0x40003FFF  
-        ADDR_NVIC,      // 0xE000E000 - 0xE000EFFF (ARM Cortex-M0 NVIC)
-        ADDR_INVALID
-    };
-    
-    AddressSpace decode_address(uint32_t address);
-    void route_transaction(tlm_generic_payload& trans, sc_time& delay, AddressSpace space);
-    
-    // Memory map constants
-    static const uint32_t MEMORY_BASE = 0x00000000;
-    static const uint32_t MEMORY_SIZE = 0x40000000;
-    static const uint32_t TRACE_BASE  = 0x40000000;
-    static const uint32_t TRACE_SIZE  = 0x00004000;
-    static const uint32_t NVIC_BASE   = 0xE000E000;
-    static const uint32_t NVIC_SIZE   = 0x00001000;
+    DeviceMapping* decode_address(uint32_t address);
+    void route_transaction(tlm_generic_payload& trans, sc_time& delay, DeviceMapping* device);
 };
 
 #endif // BUSCTRL_H
